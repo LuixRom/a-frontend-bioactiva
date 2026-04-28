@@ -6,7 +6,7 @@ import {
 } from 'recharts';
 import {
   Kanban, Bell, FileText, TrendingUp, AlertTriangle, Clock,
-  Building2, User, ChevronRight,
+  ChevronRight,
 } from 'lucide-react';
 import { mockLeads, mockOrganizations, mockContacts, mockQuotes } from '@/src/lib/mockData';
 import { getAlertLevel } from '@/src/lib/alertLevel';
@@ -92,6 +92,7 @@ export default function DashboardPage() {
   const recentActivities = useMemo(() => {
     const all = leads.flatMap(l => l.actividades.map(a => ({
       ...a,
+      estado: a.estado,
       fecha: a.fecha instanceof Date ? a.fecha : new Date(a.fecha),
     })));
     return all.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, 10);

@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/src/lib/utils';
+import { getActivityStatus, type DerivedActivityStatus } from '@/src/lib/activityStatus';
 import { Calendar, User, MessageSquare, Phone, Mail } from 'lucide-react';
 
 interface TimelineItem {
@@ -9,6 +10,7 @@ interface TimelineItem {
   tipo: 'reunion' | 'llamada' | 'email' | 'otro';
   nota: string;
   responsable: string;
+  estado?: 'pendiente' | 'realizada';
 }
 
 interface TimelineProps {
@@ -39,6 +41,21 @@ export default function Timeline({ items }: TimelineProps) {
     <div className="relative space-y-8 before:absolute before:inset-0 before:ml-5 before:-translate-x-px before:h-full before:w-0.5 before:bg-secondary before:opacity-50">
       {sortedItems.map((item, index) => {
         const Icon = icons[item.tipo] || MessageSquare;
+        const status = item.estado
+          ? getActivityStatus({
+              id: item.id,
+              tipo: item.tipo,
+              estado: item.estado,
+              nota: item.nota,
+              responsable: item.responsable,
+              fecha: item.fecha,
+            })
+          : null;
+        const statusMeta: Record<DerivedActivityStatus, string> = {
+          pendiente: 'bg-amber-100 text-amber-700',
+          realizada: 'bg-green-100 text-green-700',
+          vencida: 'bg-red-100 text-red-700',
+        };
         
         return (
           <div key={item.id} className="relative flex items-start group animate-fade-in" style={{ animationDelay: `${index * 50}ms` }}>
@@ -48,9 +65,16 @@ export default function Timeline({ items }: TimelineProps) {
             
             <div className="flex-1 ml-14 pt-1">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-bold text-primary uppercase tracking-wider">
-                  {item.tipo}
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-primary uppercase tracking-wider">
+                    {item.tipo}
+                  </span>
+                  {status && (
+                    <span className={cn('px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase tracking-wider', statusMeta[status])}>
+                      {status}
+                    </span>
+                  )}
+                </div>
                 <span className="text-xs font-medium text-text-muted">
                   {new Date(item.fecha).toLocaleDateString('es-PE', { 
                     day: 'numeric', 

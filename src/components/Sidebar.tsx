@@ -27,7 +27,7 @@ const menuItems: NavItem[] = [
   { href: '/contacts',       label: 'Contactos',      icon: Users },
   { href: '/pipeline',       label: 'Pipeline',       icon: Kanban },
   { href: '/quotes',         label: 'Cotizaciones',   icon: FileText },
-  { href: '/bulk-upload',    label: 'Carga Masiva',   icon: Upload },
+  { href: '/bulk-upload',    label: 'Importar / Exportar', icon: Upload },
   { href: '/notifications',  label: 'Notificaciones', icon: Bell },
 ];
 

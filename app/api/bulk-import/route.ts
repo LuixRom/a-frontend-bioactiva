@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateOrgId, generateContactId, generateLeadId } from '@/src/lib/generateId';
-import type { ProcessedData } from '@/bioactiva-crm/src/app/excel-mapper';
+import type { ProcessedData } from '@/src/lib/excel-mapper';
 
 // In-memory store (replace with Prisma inserts in production)
 import { mockOrganizations, mockContacts, mockLeads } from '@/src/lib/mockData';
@@ -18,13 +18,9 @@ export async function POST(req: NextRequest) {
         id,
         ruc: org.ruc,
         nombre: org.nombre,
-        nombreCompleto: org.nombreCompleto,
-        area: org.area,
         tipo: org.tipo,
         sector: org.sector,
-        tamano: org.tamano,
         ubicacion: org.ubicacion,
-        linkedin: org.linkedin,
         creadoEn: new Date(),
       });
       imported++;
@@ -41,14 +37,9 @@ export async function POST(req: NextRequest) {
       mockContacts.push({
         id,
         organizacionId: org?.id ?? '',
-        vocativo: c.vocativo,
         nombres: c.nombres,
         apellidos: c.apellidos,
         correo1: c.correo1 ?? '',
-        correo2: c.correo2,
-        telefono: c.telefono,
-        cargo: c.cargo,
-        comentarios: c.comentarios,
         creadoEn: new Date(),
       });
       imported++;
@@ -60,27 +51,19 @@ export async function POST(req: NextRequest) {
   // 3. Leads
   for (const l of body.leads ?? []) {
     try {
-      const id = l.internalId || generateLeadId(mockLeads.length + 1);
+      const id = l.idLead || generateLeadId(mockLeads.length + 1);
       const org = mockOrganizations.find(o => o.nombre === l.organizationNombre);
-      const contact = mockContacts.find(c =>
-        `${c.nombres} ${c.apellidos}`.toLowerCase() === l.contactNombre.toLowerCase()
-      );
       mockLeads.push({
         id,
         organizacionId: org?.id ?? '',
-        contactoId: contact?.id ?? '',
-        servicioInteres: l.servicioInteres,
-        canal: l.canal,
-        encargado: l.encargado,
-        encargadoEmail: l.encargadoEmail,
-        estado: l.status.toLowerCase() as any,
-        historial: l.observacion,
+        contactoId: '',
+        estado: (l.estado as 'en_prospecto' | 'ofertado' | 'cierre_con_venta' | 'cierre_sin_venta') || 'en_prospecto',
         actividades: [],
         creadoEn: new Date(),
       });
       imported++;
     } catch (e) {
-      errors.push(`Lead "${l.internalId}": ${(e as Error).message}`);
+      errors.push(`Lead "${l.idLead}": ${(e as Error).message}`);
     }
   }
 

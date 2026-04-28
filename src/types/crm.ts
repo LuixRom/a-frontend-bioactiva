@@ -40,9 +40,11 @@ export interface Contact {
 export interface Activity {
   id: string;
   tipo: 'reunion' | 'llamada' | 'email' | 'otro';
+  estado: 'pendiente' | 'realizada';
   nota: string;
   responsable: string;
   fecha: Date;
+  fechaCompletada?: Date;
 }
 
 // Lead
@@ -51,6 +53,7 @@ export interface Lead {
   contactoId: string;          // FK a Contact.id
   organizacionId: string;      // FK a Organization.id
   servicioInteres?: string;
+  comentarios?: string;        // Notas internas iniciales del lead
   canal?: string;
   encargado?: string;
   encargadoEmail?: string;     // Para alertas y notificaciones

@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { Resend } from 'resend';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-
 export async function POST(req: NextRequest) {
   const {
     encargadoEmail,
@@ -17,7 +15,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Faltan datos requeridos' }, { status: 400 });
   }
 
+  const resendApiKey = process.env.RESEND_API_KEY;
+  if (!resendApiKey) {
+    return NextResponse.json(
+      { error: 'Falta configurar RESEND_API_KEY en el entorno' },
+      { status: 503 }
+    );
+  }
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+  const resend = new Resend(resendApiKey);
 
   const { data, error } = await resend.emails.send({
     from: 'BioActiva CRM <crm@bioactiva.pe>',

@@ -1,8 +1,8 @@
 'use client';
 
 import { useState, useMemo, useRef, useEffect } from 'react';
-import { Building2, Plus, Search, Users, Kanban, ExternalLink } from 'lucide-react';
-import { mockOrganizations, mockContacts, mockLeads } from '@/src/lib/mockData';
+import { Plus, Search, Users, Kanban, ExternalLink, FileText } from 'lucide-react';
+import { mockOrganizations, mockContacts, mockLeads, mockQuotes } from '@/src/lib/mockData';
 import { TIPOS_ORG, TAMANOS_ORG, SECTORES } from '@/src/lib/constants';
 import type { Organization } from '@/src/types/crm';
 import { generateOrgId } from '@/src/lib/generateId';
@@ -10,7 +10,7 @@ import DataTable from '@/src/components/ui/DataTable';
 import Drawer from '@/src/components/ui/Drawer';
 import SunatInput, { type SunatData } from '@/src/components/ui/SunatInput';
 import ValidadorSunat from '@/src/components/ui/ValidadorSunat';
-import { cn } from '@/src/lib/utils';
+import { cn, formatCurrency, formatDate } from '@/src/lib/utils';
 
 const emptyForm = {
   nombre: '',
@@ -220,6 +220,7 @@ export default function OrganizationsPage() {
   const selectedOrg = orgs.find((o) => o.id === selectedOrgId);
   const orgContacts = mockContacts.filter((c) => c.organizacionId === selectedOrgId);
   const orgLeads = mockLeads.filter((l) => l.organizacionId === selectedOrgId);
+  const orgQuotes = mockQuotes.filter((q) => orgLeads.some((lead) => lead.id === q.leadId));
 
   return (
     <div className="space-y-6">
@@ -646,6 +647,77 @@ export default function OrganizationsPage() {
                       </div>
                     </div>
                   ))}
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
+                <FileText className="w-4 h-4 text-primary" /> Historial de Cotizaciones
+              </h4>
+              {orgQuotes.length === 0 ? (
+                <p className="text-sm text-text-muted italic">Sin cotizaciones registradas.</p>
+              ) : (
+                <div className="space-y-2">
+                  {orgQuotes.map((quote) => {
+                    const lead = orgLeads.find((item) => item.id === quote.leadId);
+                    const statusClass = {
+                      aceptada: 'bg-green-100 text-green-700',
+                      enviada: 'bg-blue-100 text-blue-700',
+                      rechazada: 'bg-red-100 text-red-700',
+                      pendiente: 'bg-amber-100 text-amber-700',
+                    }[quote.estado];
+
+                    return (
+                      <div key={quote.id} className="p-4 bg-surface border border-border-subtle rounded-xl space-y-3">
+                        <div className="flex items-start justify-between gap-4">
+                          <div>
+                            <p className="text-sm font-bold text-text">{quote.servicio}</p>
+                            <p className="text-[10px] font-mono text-text-muted mt-1">{quote.id} · Lead {quote.leadId}</p>
+                          </div>
+                          <span className={cn('px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider', statusClass)}>
+                            {quote.estado}
+                          </span>
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <p className="text-[10px] font-bold text-text-muted uppercase">Monto</p>
+                            <p className="text-sm font-bold text-text">{formatCurrency(quote.monto, quote.moneda)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-text-muted uppercase">Fecha</p>
+                            <p className="text-sm font-bold text-text">{formatDate(quote.fechaCotizacion)}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-text-muted uppercase">Dirigido a</p>
+                            <p className="text-sm text-text">{quote.dirigidoA}</p>
+                          </div>
+                          <div>
+                            <p className="text-[10px] font-bold text-text-muted uppercase">Remitente</p>
+                            <p className="text-sm text-text">{quote.remitente}</p>
+                          </div>
+                        </div>
+
+                        {(lead?.servicioInteres || quote.observacion) && (
+                          <div className="pt-3 border-t border-border-subtle space-y-2">
+                            {lead?.servicioInteres && (
+                              <div>
+                                <p className="text-[10px] font-bold text-text-muted uppercase">Oportunidad asociada</p>
+                                <p className="text-sm text-text">{lead.servicioInteres}</p>
+                              </div>
+                            )}
+                            {quote.observacion && (
+                              <div>
+                                <p className="text-[10px] font-bold text-text-muted uppercase">Observación</p>
+                                <p className="text-sm text-text">{quote.observacion}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
