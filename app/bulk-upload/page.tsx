@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react';
 import { Upload, FileSpreadsheet, CheckCircle2, AlertTriangle, XCircle, Loader2, X } from 'lucide-react';
 import * as XLSX from 'xlsx';
-import { processExcelData } from '@/bioactiva-crm/src/app/excel-mapper';
+import { processExcelData } from '@/src/lib/excel-mapper';
 import { normalizeColumns } from '@/src/lib/columnMapper';
 import {
   detectDuplicateOrgs,
@@ -13,7 +13,7 @@ import {
 import { mockOrganizations, mockContacts } from '@/src/lib/mockData';
 import { useToast } from '@/src/components/ui/Toast';
 import { cn } from '@/src/lib/utils';
-import type { OrganizationImport, ContactImport, ProcessedData } from '@/bioactiva-crm/src/app/excel-mapper';
+import type { OrganizationImport, ContactImport, ProcessedData } from '@/src/lib/excel-mapper';
 
 type Step = 'upload' | 'preview' | 'done';
 

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import { Building2, Plus, Search, Users, Kanban, ExternalLink } from 'lucide-react';
 import { mockOrganizations, mockContacts, mockLeads } from '@/src/lib/mockData';
+import { TIPOS_ORG, TAMANOS_ORG, SECTORES } from '@/src/lib/constants';
 import type { Organization } from '@/src/types/crm';
 import { generateOrgId } from '@/src/lib/generateId';
 import DataTable from '@/src/components/ui/DataTable';
@@ -34,13 +35,54 @@ export default function OrganizationsPage() {
   const [isFlashActive, setIsFlashActive] = useState(false);
   const [form, setForm] = useState(emptyForm);
 
+  // Búsqueda por razón social
+  const [busquedaModo, setBusquedaModo]     = useState<'ruc' | 'nombre'>('ruc');
+  const [nombreQuery, setNombreQuery]       = useState('');
+  const [nombreResults, setNombreResults]   = useState<{ ruc: string; nombre: string; ubicacion?: string; estado?: string }[]>([]);
+  const [showNombreDropdown, setShowNombreDropdown] = useState(false);
+  const nombreRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (nombreRef.current && !nombreRef.current.contains(e.target as Node)) {
+        setShowNombreDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const nombreDebounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [nombreLoading, setNombreLoading] = useState(false);
+
+  const handleNombreChange = (val: string) => {
+    setNombreQuery(val);
+    setShowNombreDropdown(false);
+    if (nombreDebounce.current) clearTimeout(nombreDebounce.current);
+    if (val.trim().length < 3) { setNombreResults([]); return; }
+    nombreDebounce.current = setTimeout(async () => {
+      setNombreLoading(true);
+      try {
+        const res = await fetch(`/api/search-nombre?nombre=${encodeURIComponent(val.trim())}`);
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          setNombreResults(data);
+          setShowNombreDropdown(true);
+        } else {
+          setNombreResults([]);
+          setShowNombreDropdown(false);
+        }
+      } catch { /* silencio */ }
+      finally { setNombreLoading(false); }
+    }, 700);
+  };
+
   /** Auto-generate next ID based on current count */
   const nextId = useMemo(() => generateOrgId(orgs.length + 1), [orgs.length]);
 
   const handleSunatClear = () => {
     setForm((prev) => ({
       ...prev,
-      // Limpiar solo los campos que se auto-rellenan desde SUNAT
       nombre: '',
       nombreCompleto: '',
       ubicacion: '',
@@ -52,7 +94,6 @@ export default function OrganizationsPage() {
   const handleSunatSuccess = (data: SunatData) => {
     setForm((prev) => ({
       ...prev,
-      // Autocomplete only fields that come back with a value
       ...(data.ruc            && { ruc: data.ruc }),
       ...(data.nombre         && { nombre: data.nombre }),
       ...(data.nombreCompleto && { nombreCompleto: data.nombreCompleto }),
@@ -61,6 +102,41 @@ export default function OrganizationsPage() {
     }));
     setIsFlashActive(true);
     setTimeout(() => setIsFlashActive(false), 1200);
+  };
+
+  const handleNombreSelect = async (item: { ruc: string; nombre: string; ubicacion?: string; estado?: string }) => {
+    setNombreQuery(item.nombre);
+    setShowNombreDropdown(false);
+    // Prellenar inmediatamente con datos de la lista
+    setForm(prev => ({
+      ...prev,
+      ruc:      item.ruc,
+      nombre:   item.nombre,
+      ...(item.ubicacion && { ubicacion: item.ubicacion }),
+    }));
+    // Lookup completo por RUC para traer nombreCompleto, actividades, etc.
+    if (item.ruc.length === 11) {
+      try {
+        const res = await fetch(`/api/search-document?document=${item.ruc}`, {
+          signal: AbortSignal.timeout(40000),
+        });
+        if (res.ok) {
+          const data: SunatData = await res.json();
+          setForm(prev => ({
+            ...prev,
+            ...(data.ruc            && { ruc: data.ruc }),
+            ...(data.nombre         && { nombre: data.nombre }),
+            ...(data.nombreCompleto && { nombreCompleto: data.nombreCompleto }),
+            ...(data.ubicacion      && { ubicacion: data.ubicacion }),
+            ...(data.actividades    && { actividades: data.actividades }),
+          }));
+          setIsFlashActive(true);
+          setTimeout(() => setIsFlashActive(false), 1200);
+        }
+      } catch (e) {
+        console.error('[nombre select RUC lookup]', e);
+      }
+    }
   };
 
   const handleCreate = () => {
@@ -205,22 +281,92 @@ export default function OrganizationsPage() {
             />
           </div>
 
-          {/* RUC — Optional */}
-          <div className="space-y-1.5">
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">RUC</label>
-              <span className="text-[10px] text-text-muted font-normal">Opcional</span>
+          {/* Toggle RUC / Razón Social */}
+          <div className="space-y-3">
+            <div className="flex items-center gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
+              {(['ruc', 'nombre'] as const).map((modo) => (
+                <button
+                  key={modo}
+                  type="button"
+                  onClick={() => {
+                    setForm(f => ({ ...f, ruc: '' }));
+                    setNombreQuery('');
+                    setNombreResults([]);
+                    setShowNombreDropdown(false);
+                  }}
+                  className={cn(
+                    'px-4 py-1.5 rounded-lg text-xs font-bold transition-all',
+                    /* track mode via a local state added below */
+                    modo === busquedaModo
+                      ? 'bg-surface text-primary shadow-sm'
+                      : 'text-text-muted hover:text-text'
+                  )}
+                  onClickCapture={() => setBusquedaModo(modo)}
+                >
+                  {modo === 'ruc' ? 'Por RUC' : 'Por Razón Social'}
+                </button>
+              ))}
             </div>
-            <SunatInput
-              value={form.ruc}
-              onChange={(val) => setForm({ ...form, ruc: val })}
-              onSuccess={handleSunatSuccess}
-              onClear={handleSunatClear}
-            />
-            <p className="text-xs text-text-muted mt-1">
-              Opcional — si ingresas el RUC, los datos se completarán automáticamente desde SUNAT.
-              Las organizaciones sin RUC (startups, personas naturales) pueden registrarse igualmente.
-            </p>
+
+            {busquedaModo === 'ruc' ? (
+              <div className="space-y-1.5">
+                <SunatInput
+                  value={form.ruc}
+                  onChange={(val) => setForm({ ...form, ruc: val })}
+                  onSuccess={handleSunatSuccess}
+                  onClear={handleSunatClear}
+                />
+                <p className="text-xs text-text-muted">11 dígitos → datos se completan automáticamente desde SUNAT.</p>
+              </div>
+            ) : (
+              <div className="space-y-1.5" ref={nombreRef}>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={nombreQuery}
+                    onChange={(e) => handleNombreChange(e.target.value)}
+                    className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                    placeholder="Ej: Altomayo, Cacao de Aroma..."
+                  />
+                  {nombreLoading && (
+                    <span className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] text-text-muted animate-pulse">buscando en SUNAT...</span>
+                  )}
+                  {showNombreDropdown && nombreResults.length > 0 && (
+                    <div className="absolute z-50 left-0 right-0 mt-1 bg-surface border border-border-subtle rounded-xl shadow-lg max-h-56 overflow-y-auto">
+                      {nombreResults.map((item) => (
+                        <button
+                          key={item.ruc}
+                          type="button"
+                          onClick={() => handleNombreSelect(item)}
+                          className="w-full text-left px-4 py-2.5 hover:bg-app-bg transition-colors flex flex-col gap-0.5 border-b border-border-subtle last:border-0"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-semibold text-text truncate">{item.nombre}</span>
+                            <span className="text-xs font-mono text-text-muted shrink-0">{item.ruc}</span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {item.ubicacion && (
+                              <span className="text-[10px] text-text-muted">{item.ubicacion}</span>
+                            )}
+                            {item.estado && (
+                              <span className={cn(
+                                'text-[10px] font-bold px-1.5 py-0.5 rounded',
+                                item.estado.toUpperCase().includes('ACTIVO')
+                                  ? 'bg-emerald-100 text-emerald-700'
+                                  : 'bg-red-100 text-red-600'
+                              )}>
+                                {item.estado}
+                              </span>
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <p className="text-xs text-text-muted">Escribe 3+ caracteres → aparecen opciones → selecciona para auto-rellenar RUC y nombre.</p>
+              </div>
+            )}
           </div>
 
           <div className="space-y-4">
@@ -284,12 +430,7 @@ export default function OrganizationsPage() {
                   className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
                 >
                   <option value="">Seleccionar...</option>
-                  <option value="Empresa">Empresa</option>
-                  <option value="Startup">Startup</option>
-                  <option value="Universidad">Universidad</option>
-                  <option value="Entidad Pública">Entidad Pública</option>
-                  <option value="ONG">ONG</option>
-                  <option value="Otro">Otro</option>
+                  {TIPOS_ORG.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
 
@@ -302,10 +443,7 @@ export default function OrganizationsPage() {
                   className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
                 >
                   <option value="">Seleccionar...</option>
-                  <option value="Micro">Micro</option>
-                  <option value="Pequeña">Pequeña</option>
-                  <option value="Mediana">Mediana</option>
-                  <option value="Grande">Grande</option>
+                  {TAMANOS_ORG.map(t => <option key={t} value={t}>{t}</option>)}
                 </select>
               </div>
             </div>
@@ -313,13 +451,14 @@ export default function OrganizationsPage() {
             {/* Sector */}
             <div className="space-y-1.5">
               <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Sector</label>
-              <input
-                type="text"
+              <select
                 value={form.sector}
                 onChange={(e) => setForm({ ...form, sector: e.target.value })}
                 className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
-                placeholder="Ej: Agroindustria, Tecnología, Salud"
-              />
+              >
+                <option value="">Seleccionar...</option>
+                {SECTORES.map(s => <option key={s} value={s}>{s}</option>)}
+              </select>
             </div>
 
             {/* Ubicación */}

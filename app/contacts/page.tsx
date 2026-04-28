@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Users, Plus, Phone, Mail, Building2, ExternalLink, MessageSquare } from 'lucide-react';
 import { getInitials } from '@/src/lib/utils';
 import { mockContacts, mockOrganizations, mockLeads } from '@/src/lib/mockData';
+import { VOCATIVOS } from '@/src/lib/constants';
 import type { Contact } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
 import Drawer from '@/src/components/ui/Drawer';
@@ -178,13 +179,14 @@ export default function ContactsPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Vocativo</label>
-                <input
-                  type="text"
+                <select
                   value={form.vocativo}
-                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, vocativo: e.target.value })}
+                  onChange={(e) => setForm({ ...form, vocativo: e.target.value })}
                   className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
-                  placeholder="Sr. / Sra. / Lic."
-                />
+                >
+                  <option value="">—</option>
+                  {VOCATIVOS.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-text-muted uppercase tracking-wider">

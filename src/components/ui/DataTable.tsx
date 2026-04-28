@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Search, Filter, X } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
@@ -221,12 +221,11 @@ export default function DataTable<T extends { id: string }>({
             </button>
             <div className="flex items-center gap-1">
               {pageButtons.map((p, i, arr) => (
-                <>
+                <React.Fragment key={p}>
                   {i > 0 && arr[i - 1] !== p - 1 && (
-                    <span key={`ellipsis-${p}`} className="text-text-muted text-xs px-1">…</span>
+                    <span className="text-text-muted text-xs px-1">…</span>
                   )}
                   <button
-                    key={p}
                     onClick={() => setCurrentPage(p)}
                     className={cn(
                       'w-8 h-8 rounded-lg text-xs font-bold transition-all',
@@ -237,7 +236,7 @@ export default function DataTable<T extends { id: string }>({
                   >
                     {p}
                   </button>
-                </>
+                </React.Fragment>
               ))}
             </div>
             <button

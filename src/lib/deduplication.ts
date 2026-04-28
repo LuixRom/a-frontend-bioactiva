@@ -1,6 +1,6 @@
 import { compareTwoStrings } from 'string-similarity';
 import type { Organization, Contact } from '@/src/types/crm';
-import type { OrganizationImport, ContactImport } from '@/bioactiva-crm/src/app/excel-mapper';
+import type { OrganizationImport, ContactImport } from '@/src/lib/excel-mapper';
 
 export type RowStatus = 'nuevo' | 'duplicado_exacto' | 'duplicado_similar' | 'ok';
 

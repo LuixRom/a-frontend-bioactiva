@@ -12,11 +12,10 @@ import { useToast } from '@/src/components/ui/Toast';
 import { exportToCsv } from '@/src/lib/exportCsv';
 
 const COLUMNAS = [
-  { id: 'nuevo',           label: 'Nuevo',             color: '#6B7280' },
-  { id: 'proceso',         label: 'Proceso',           color: '#3B82F6' },
-  { id: 'propuesta',       label: 'Propuesta',         color: '#F59E0B' },
-  { id: 'cerrado_ganado',  label: 'Cerrado — ganado',  color: '#10B981' },
-  { id: 'cerrado_perdido', label: 'Cerrado — perdido', color: '#EF4444' },
+  { id: 'en_prospecto',     label: 'En prospecto',     color: '#6B7280' },
+  { id: 'ofertado',         label: 'Ofertado',         color: '#F59E0B' },
+  { id: 'cierre_con_venta', label: 'Cierre con venta', color: '#10B981' },
+  { id: 'cierre_sin_venta', label: 'Cierre sin venta', color: '#EF4444' },
 ] as const;
 
 export default function PipelinePage() {

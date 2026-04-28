@@ -12,11 +12,10 @@ import { cn } from '@/src/lib/utils';
 import { useAuthStore } from '@/src/store/authStore';
 
 const ESTADOS = [
-  { value: 'nuevo',           label: 'Nuevo' },
-  { value: 'proceso',         label: 'En Proceso' },
-  { value: 'propuesta',       label: 'Propuesta' },
-  { value: 'cerrado_ganado',  label: 'Cerrado — Ganado' },
-  { value: 'cerrado_perdido', label: 'Cerrado — Perdido' },
+  { value: 'en_prospecto',     label: 'En prospecto' },
+  { value: 'ofertado',         label: 'Ofertado' },
+  { value: 'cierre_con_venta', label: 'Cierre con venta' },
+  { value: 'cierre_sin_venta', label: 'Cierre sin venta' },
 ] as const;
 
 const ACTIVITY_TIPOS = [

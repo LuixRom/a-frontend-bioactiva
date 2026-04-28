@@ -98,6 +98,82 @@ async def consultar_por_ruc(ruc: str):
     return await scrape_by_ruc(ruc)
 
 
+import re as _re
+
+async def scrape_by_nombre(nombre: str) -> list:
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True,
+            args=["--disable-gpu", "--no-sandbox"]
+        )
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                       "(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+        )
+        page = await context.new_page()
+
+        try:
+            await page.goto(
+                "https://e-consultaruc.sunat.gob.pe/cl-ti-itconsruc/FrameCriterioBusquedaWeb.jsp",
+                timeout=60000,
+                wait_until="domcontentloaded"
+            )
+
+            # Click tab "Por Nomb./Raz.Soc." por texto visible
+            await page.get_by_text("Por Nomb./Raz.Soc.").click()
+
+            # El input de búsqueda (único textbox en la página)
+            await page.get_by_role("textbox").fill(nombre)
+
+            # Click "Buscar"
+            await page.get_by_role("button", name="Buscar").click()
+
+            # Esperar lista de resultados
+            await page.wait_for_selector("text=Relación de contribuyentes", timeout=15000)
+
+            content = await page.inner_text("body")
+
+            # Parsear bloque por bloque:
+            # RUC: 20603673141
+            # NOMBRE EMPRESA
+            # Ubicación: LIMA
+            # Estado: ACTIVO
+            resultados = []
+            seen = set()
+            bloques = _re.split(r'\n(?=RUC:\s*\d{11})', content)
+            for bloque in bloques:
+                ruc_m    = _re.search(r'RUC:\s*(\d{11})', bloque)
+                nom_m    = _re.search(r'\d{11}\s+([^\n\r]+)', bloque)
+                ubic_m   = _re.search(r'Ubicaci[oó]n:\s*([^\n\r]+)', bloque)
+                estado_m = _re.search(r'Estado:\s*([^\n\r]+)', bloque)
+                if ruc_m and nom_m:
+                    ruc = ruc_m.group(1)
+                    if ruc not in seen:
+                        seen.add(ruc)
+                        resultados.append({
+                            "ruc":       ruc,
+                            "nombre":    nom_m.group(1).strip(),
+                            "ubicacion": ubic_m.group(1).strip()   if ubic_m   else None,
+                            "estado":    estado_m.group(1).strip() if estado_m else None,
+                        })
+
+            await browser.close()
+            return resultados[:20]
+
+        except Exception as e:
+            await browser.close()
+            raise HTTPException(status_code=503, detail=f"SUNAT error: {str(e)}")
+
+
+@app.get("/consultar-nombre")
+async def consultar_por_nombre(nombre: str):
+    """Busca por razón social — retorna lista de coincidencias"""
+    nombre = nombre.strip()
+    if len(nombre) < 3:
+        raise HTTPException(status_code=400, detail="Ingresa al menos 3 caracteres")
+    return await scrape_by_nombre(nombre)
+
+
 @app.get("/health")
 async def health():
     return {"status": "ok"}

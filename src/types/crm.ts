@@ -54,7 +54,7 @@ export interface Lead {
   canal?: string;
   encargado?: string;
   encargadoEmail?: string;     // Para alertas y notificaciones
-  estado: 'nuevo' | 'proceso' | 'propuesta' | 'cerrado_ganado' | 'cerrado_perdido';
+  estado: 'en_prospecto' | 'ofertado' | 'cierre_con_venta' | 'cierre_sin_venta';
   desafioOportunidad?: string;
   proximaActividad?: string;
   fechaProximaActividad?: Date;
