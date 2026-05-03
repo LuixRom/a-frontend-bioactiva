@@ -21,8 +21,10 @@ export async function POST(
     estado: body.estado,
     nota: body.nota,
     responsable: body.responsable,
-    fecha: new Date(body.fecha),
-    fechaCompletada: body.estado === 'realizada' ? new Date(body.fecha) : undefined,
+    fechaInicio: new Date(body.fechaInicio),
+    fechaFin: body.fechaFin ? new Date(body.fechaFin) : undefined,
+    fechaCompletada: body.estado === 'realizada' ? new Date(body.fechaInicio) : undefined,
+    linkReunion: body.linkReunion,
   };
 
   leads[idx] = syncLeadNextActivity({

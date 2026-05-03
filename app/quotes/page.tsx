@@ -7,8 +7,6 @@ import { mockQuotes, mockLeads, mockOrganizations, mockContacts } from '@/src/li
 import type { Quote } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
 import Drawer from '@/src/components/ui/Drawer';
-import SunatInput, { type SunatData } from '@/src/components/ui/SunatInput';
-
 type QuoteEstado = Quote['estado'];
 
 const STATUS_META: Record<QuoteEstado, { label: string; color: string; bg: string }> = {
@@ -203,12 +201,6 @@ export default function QuotesPage() {
     });
   };
 
-  const handleSunatSuccess = (data: SunatData) => {
-    setForm(f => ({
-      ...f,
-      cliente: data.nombreCompleto ?? data.nombre ?? f.cliente,
-    }));
-  };
 
   const canSave = form.dirigidoA.trim() && form.cliente.trim() && form.servicio.trim() && form.remitente.trim();
 
@@ -254,42 +246,19 @@ export default function QuotesPage() {
             <p className="text-xs text-text-muted">Seleccionar un lead completa automáticamente cliente, contacto y servicio.</p>
           </div>
 
-          {/* O buscar por RUC */}
-          <div className="space-y-1.5">
-            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
-              O buscar por RUC <span className="font-normal normal-case text-text-muted text-[10px]">— completa razón social desde SUNAT</span>
-            </label>
-            <SunatInput
-              value={form.ruc}
-              onChange={(val) => setForm({ ...form, ruc: val })}
-              onSuccess={handleSunatSuccess}
-              onClear={() => setForm(f => ({ ...f, ruc: '' }))}
-            />
-          </div>
+
 
           <hr className="border-border-subtle" />
 
           {/* Fecha — genera año/mes automático */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Fecha cotización</label>
-              <input
-                type="date"
-                value={form.fechaCotizacion}
-                onChange={(e) => setForm({ ...form, fechaCotizacion: e.target.value })}
-                className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">ID de Lead</label>
-              <input
-                type="text"
-                value={form.leadId}
-                readOnly
-                className="w-full px-4 py-3 bg-app-bg/60 border border-border-subtle rounded-xl text-sm font-mono text-text-muted cursor-not-allowed"
-                placeholder="Auto desde selector"
-              />
-            </div>
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Fecha cotización</label>
+            <input
+              type="date"
+              value={form.fechaCotizacion}
+              onChange={(e) => setForm({ ...form, fechaCotizacion: e.target.value })}
+              className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">

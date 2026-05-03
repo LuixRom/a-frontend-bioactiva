@@ -6,9 +6,12 @@ import { useAuthStore } from '@/src/store/authStore';
 import Sidebar from '@/src/components/Sidebar';
 import LoginPage from '@/src/components/LoginPage';
 import TopBar from '@/src/components/TopBar';
+import { getMsalInstance } from '@/src/lib/msalConfig';
+import { useToast } from '@/src/components/ui/Toast';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated } = useAuthStore();
+  const { isAuthenticated, userEmail, setMsToken, setMsAccountUsername } = useAuthStore();
+  const { showToast } = useToast();
   /**
    * Guard against hydration mismatch.
    *
@@ -25,7 +28,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     setMounted(true);
-  }, []);
+
+    const handleRedirect = async () => {
+      try {
+        const msalInstance = await getMsalInstance();
+        const response = await msalInstance.handleRedirectPromise();
+        if (response && response.accessToken && response.account) {
+          setMsToken(response.accessToken);
+          setMsAccountUsername(response.account.username);
+          showToast('Cuenta de Microsoft conectada exitosamente', 'success');
+        }
+      } catch (error) {
+        console.error('Error handling MSAL redirect:', error);
+      }
+    };
+    handleRedirect();
+  }, [setMsToken, setMsAccountUsername, showToast, userEmail]);
 
   if (!mounted) {
     // Render a blank screen that matches what the server sends.

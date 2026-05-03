@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
 import {
   LayoutDashboard,
@@ -12,6 +12,7 @@ import {
   LogOut,
   Upload,
   FileText,
+  UserCog,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
@@ -21,7 +22,7 @@ type NavItem = {
   icon: React.ElementType;
 };
 
-const menuItems: NavItem[] = [
+const baseMenuItems: NavItem[] = [
   { href: '/',               label: 'Dashboard',     icon: LayoutDashboard },
   { href: '/organizations',  label: 'Entidades',      icon: Building2 },
   { href: '/contacts',       label: 'Contactos',      icon: Users },
@@ -33,7 +34,12 @@ const menuItems: NavItem[] = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { logout } = useAuthStore();
+  const router = useRouter();
+  const { logout, role } = useAuthStore();
+
+  const menuItems = role === 'Administrador'
+    ? [...baseMenuItems, { href: '/users', label: 'Gestión de Usuarios', icon: UserCog }]
+    : baseMenuItems;
 
   return (
     <aside
@@ -87,7 +93,10 @@ export default function Sidebar() {
       {/* Footer / Logout */}
       <div className="p-4 border-t border-border-subtle">
         <button
-          onClick={logout}
+          onClick={() => {
+            logout();
+            router.push('/');
+          }}
           className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-semibold text-text-muted hover:text-red-600 hover:bg-red-50 transition-all duration-200"
         >
           <LogOut className="w-5 h-5" />

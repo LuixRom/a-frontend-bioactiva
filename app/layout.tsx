@@ -20,11 +20,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       </head>
       <body>
         <Providers>
-          <AppShell>
-            <ToastProvider>
+          <ToastProvider>
+            <AppShell>
               {children}
-            </ToastProvider>
-          </AppShell>
+            </AppShell>
+          </ToastProvider>
         </Providers>
       </body>
     </html>

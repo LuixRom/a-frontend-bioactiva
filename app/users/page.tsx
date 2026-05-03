@@ -1,33 +1,100 @@
 'use client';
 
 import { useState } from 'react';
-import { Users, Plus, Eye, Edit3, Trash2 } from 'lucide-react';
+import { Users, Plus, Eye, Edit3, Trash2, ShieldAlert } from 'lucide-react';
 import { getInitials } from '@/src/lib/utils';
-
-type CRMUser = {
-  id: number;
-  name: string;
-  email: string;
-  active: boolean;
-  lastLogin: string;
-};
-
-const initialUsers: CRMUser[] = [
-  { id: 1, name: 'Karien Diaz',     email: 'karien@bioactiva.pe',    active: true,  lastLogin: 'Hoy 09:15' },
-  { id: 2, name: 'Administración',  email: 'admin@bioactiva.pe',     active: true,  lastLogin: 'Hoy 08:40' },
-  { id: 3, name: 'Ana Rojas',       email: 'arojas@bioactiva.pe',    active: true,  lastLogin: 'Ayer 17:30' },
-  { id: 4, name: 'Luis Torres',     email: 'ltorres@bioactiva.pe',   active: true,  lastLogin: 'Hoy 10:00' },
-  { id: 5, name: 'María Quispe',    email: 'mquispe@bioactiva.pe',   active: true,  lastLogin: 'Hace 2 días' },
-  { id: 6, name: 'Carlos Mamani',   email: 'cmamani@bioactiva.pe',   active: true,  lastLogin: 'Hoy 07:55' },
-  { id: 7, name: 'Rosa Condori',    email: 'rcondori@bioactiva.pe',  active: false, lastLogin: 'Hace 1 sem.' },
-];
+import { type CRMUser } from '@/src/lib/mockData';
+import { useAuthStore } from '@/src/store/authStore';
+import { useToast } from '@/src/components/ui/Toast';
+import { useUsersStore } from '@/src/store/usersStore';
 
 export default function UsersPage() {
-  const [users, setUsers] = useState(initialUsers);
-  const [showCreate, setShowCreate] = useState(false);
+  const { role } = useAuthStore();
+  const { showToast } = useToast();
+  const { users, setUsers, addUser, updateUser, deleteUser } = useUsersStore();
+  
+  const [showModal, setShowModal] = useState(false);
+  const [editingUser, setEditingUser] = useState<CRMUser | null>(null);
+  
+  const [formData, setFormData] = useState({
+    name: '',
+    email: '',
+    password: '',
+    rol: 'Trabajador' as 'Administrador' | 'Trabajador',
+  });
 
-  const toggleActive = (id: number) =>
-    setUsers((prev) => prev.map((u) => (u.id === id ? { ...u, active: !u.active } : u)));
+  const toggleActive = (id: number) => {
+    const updated = users.map(u => {
+      if (u.id === id) {
+        return { ...u, active: !u.active };
+      }
+      return u;
+    });
+    setUsers(updated);
+    showToast('Estado de usuario actualizado', 'success');
+  };
+
+  const handleDelete = (id: number) => {
+    if (window.confirm('¿Estás seguro de que deseas eliminar este usuario?')) {
+      deleteUser(id);
+      showToast('Usuario eliminado correctamente', 'success');
+    }
+  };
+
+  const handleOpenCreate = () => {
+    setEditingUser(null);
+    setFormData({ name: '', email: '', password: '', rol: 'Trabajador' });
+    setShowModal(true);
+  };
+
+  const handleOpenEdit = (user: CRMUser) => {
+    setEditingUser(user);
+    setFormData({ name: user.name, email: user.email, password: '', rol: user.rol });
+    setShowModal(true);
+  };
+
+  const handleSave = () => {
+    if (!formData.name.trim() || !formData.email.trim()) {
+      showToast('Por favor, completa los campos obligatorios', 'error');
+      return;
+    }
+
+    if (editingUser) {
+      // Editar
+      const updated: CRMUser = {
+        ...editingUser,
+        name: formData.name,
+        email: formData.email,
+        rol: formData.rol,
+      };
+      updateUser(updated);
+      showToast('Usuario actualizado correctamente', 'success');
+    } else {
+      // Crear
+      const newId = Math.max(...users.map(u => u.id), 0) + 1;
+      const newUser: CRMUser = {
+        id: newId,
+        name: formData.name,
+        email: formData.email,
+        active: true,
+        lastLogin: 'Nunca',
+        rol: formData.rol,
+      };
+      addUser(newUser);
+      showToast('Usuario creado correctamente', 'success');
+    }
+    setShowModal(false);
+  };
+
+  if (role !== 'Administrador') {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] space-y-4 animate-fade-in text-center">
+        <ShieldAlert className="w-16 h-16 text-red-500/50" />
+        <h2 className="text-2xl font-black text-text">Acceso Denegado</h2>
+        <p className="text-text-muted">No tienes los permisos necesarios para gestionar usuarios.</p>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -38,7 +105,7 @@ export default function UsersPage() {
         </div>
         <button
           id="create-user-btn"
-          onClick={() => setShowCreate(true)}
+          onClick={handleOpenCreate}
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-105"
           style={{ background: 'linear-gradient(135deg, #1C7E3C, #24a34e)' }}
         >
@@ -46,17 +113,15 @@ export default function UsersPage() {
         </button>
       </div>
 
-      {/* Info notice */}
       <div className="rounded-xl p-4 text-sm" style={{ background: '#F1FFEC', border: '1px solid #BCF7B3', color: '#1C7E3C' }}>
-        <strong>Acceso único:</strong> Todos los usuarios del equipo BioActiva tienen acceso completo al sistema. No hay distinción de roles ni restricciones de vista.
+        <strong>Gestión de Roles:</strong> Solo los administradores pueden gestionar usuarios. Los trabajadores tienen acceso operativo.
       </div>
 
-      {/* Users table */}
       <div className="rounded-2xl overflow-hidden" style={{ background: '#fff', border: '1px solid #edfce8', boxShadow: '0 2px 8px rgba(28,126,60,0.06)' }}>
         <table className="w-full">
           <thead>
             <tr style={{ background: '#f8fdf6', borderBottom: '1px solid #edfce8' }}>
-              {['Usuario', 'Correo', 'Último acceso', 'Estado', 'Acciones'].map((h) => (
+              {['Usuario', 'Rol', 'Correo', 'Último acceso', 'Estado', 'Acciones'].map((h) => (
                 <th key={h} className="px-5 py-3 text-left text-xs font-bold uppercase tracking-wide" style={{ color: '#4a7c5e' }}>{h}</th>
               ))}
             </tr>
@@ -73,6 +138,11 @@ export default function UsersPage() {
                     <p className="text-sm font-semibold" style={{ color: '#0f2d1a' }}>{user.name}</p>
                   </div>
                 </td>
+                <td className="px-5 py-3 text-xs" style={{ color: '#4a7c5e' }}>
+                  <span className="px-2 py-1 rounded bg-green-50 text-green-700 font-medium">
+                    {user.rol}
+                  </span>
+                </td>
                 <td className="px-5 py-3 text-xs" style={{ color: '#4a7c5e' }}>{user.email}</td>
                 <td className="px-5 py-3 text-xs" style={{ color: '#9dbfa8' }}>{user.lastLogin}</td>
                 <td className="px-5 py-3">
@@ -88,13 +158,16 @@ export default function UsersPage() {
                 </td>
                 <td className="px-5 py-3">
                   <div className="flex gap-1.5">
-                    <button className="p-1.5 rounded-lg hover:bg-green-50 transition-colors">
-                      <Eye className="w-4 h-4" style={{ color: '#4a7c5e' }} />
-                    </button>
-                    <button className="p-1.5 rounded-lg hover:bg-green-50 transition-colors">
+                    <button 
+                      onClick={() => handleOpenEdit(user)}
+                      className="p-1.5 rounded-lg hover:bg-green-50 transition-colors"
+                    >
                       <Edit3 className="w-4 h-4" style={{ color: '#4a7c5e' }} />
                     </button>
-                    <button className="p-1.5 rounded-lg hover:bg-red-50 transition-colors">
+                    <button 
+                      onClick={() => handleDelete(user.id)}
+                      className="p-1.5 rounded-lg hover:bg-red-50 transition-colors"
+                    >
                       <Trash2 className="w-4 h-4" style={{ color: '#dc2626' }} />
                     </button>
                   </div>
@@ -105,32 +178,71 @@ export default function UsersPage() {
         </table>
       </div>
 
-      {showCreate && (
+      {showModal && (
         <div className="fixed inset-0 flex items-center justify-center z-50 p-4" style={{ background: 'rgba(0,0,0,0.5)' }}>
           <div className="w-full max-w-md rounded-2xl overflow-hidden animate-fade-in"
                style={{ background: '#fff', boxShadow: '0 24px 64px rgba(0,0,0,0.2)' }}>
             <div className="px-6 py-4 border-b flex items-center justify-between" style={{ borderColor: '#edfce8' }}>
-              <h2 className="font-bold" style={{ color: '#0f2d1a' }}>Nuevo Usuario</h2>
-              <button onClick={() => setShowCreate(false)} className="text-gray-400 hover:text-gray-600">✕</button>
+              <h2 className="font-bold" style={{ color: '#0f2d1a' }}>
+                {editingUser ? 'Editar Usuario' : 'Nuevo Usuario'}
+              </h2>
+              <button onClick={() => setShowModal(false)} className="text-gray-400 hover:text-gray-600">✕</button>
             </div>
             <div className="p-6 space-y-4">
-              {[
-                { label: 'Nombre completo', type: 'text' },
-                { label: 'Correo electrónico', type: 'email' },
-                { label: 'Contraseña temporal', type: 'password' },
-              ].map((f) => (
-                <div key={f.label}>
-                  <label className="text-xs font-semibold uppercase tracking-wide block mb-1.5" style={{ color: '#4a7c5e' }}>{f.label}</label>
-                  <input type={f.type} className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
-                         style={{ border: '1.5px solid #c8edcf', background: '#f8fdf6', color: '#0f2d1a' }} />
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide block mb-1.5" style={{ color: '#4a7c5e' }}>Nombre completo *</label>
+                <input 
+                  type="text" 
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ border: '1.5px solid #c8edcf', background: '#f8fdf6', color: '#0f2d1a' }} 
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide block mb-1.5" style={{ color: '#4a7c5e' }}>Correo electrónico *</label>
+                <input 
+                  type="email" 
+                  value={formData.email}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                  style={{ border: '1.5px solid #c8edcf', background: '#f8fdf6', color: '#0f2d1a' }} 
+                />
+              </div>
+              {!editingUser && (
+                <div>
+                  <label className="text-xs font-semibold uppercase tracking-wide block mb-1.5" style={{ color: '#4a7c5e' }}>Contraseña temporal</label>
+                  <input 
+                    type="password" 
+                    value={formData.password}
+                    onChange={e => setFormData({ ...formData, password: e.target.value })}
+                    className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                    style={{ border: '1.5px solid #c8edcf', background: '#f8fdf6', color: '#0f2d1a' }} 
+                  />
                 </div>
-              ))}
+              )}
+              <div>
+                <label className="text-xs font-semibold uppercase tracking-wide block mb-1.5" style={{ color: '#4a7c5e' }}>Rol</label>
+                <select 
+                  value={formData.rol}
+                  onChange={e => setFormData({ ...formData, rol: e.target.value as 'Administrador' | 'Trabajador' })}
+                  className="w-full px-4 py-2.5 rounded-xl text-sm outline-none" 
+                  style={{ border: '1.5px solid #c8edcf', background: '#f8fdf6', color: '#0f2d1a' }}
+                >
+                  <option value="Trabajador">Trabajador</option>
+                  <option value="Administrador">Administrador</option>
+                </select>
+              </div>
               <div className="flex gap-3 pt-2">
-                <button onClick={() => setShowCreate(false)}
+                <button onClick={() => setShowModal(false)}
                         className="flex-1 py-2.5 rounded-xl text-sm font-medium"
                         style={{ background: '#F1FFEC', color: '#4a7c5e' }}>Cancelar</button>
-                <button className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
-                        style={{ background: '#1C7E3C' }}>Crear Usuario</button>
+                <button 
+                  onClick={handleSave}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+                  style={{ background: '#1C7E3C' }}>
+                  {editingUser ? 'Guardar Cambios' : 'Crear Usuario'}
+                </button>
               </div>
             </div>
           </div>
