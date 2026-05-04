@@ -2,7 +2,11 @@
 
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Download, ExternalLink, TrendingUp, CheckCircle2, Clock, ArrowUpRight } from 'lucide-react';
+import {
+  Plus, Download, ExternalLink, TrendingUp, CheckCircle2, Clock, ArrowUpRight,
+  Printer, Mail,
+} from 'lucide-react';
+import Link from 'next/link';
 import { formatCurrency, formatDate, cn } from '@/src/lib/utils';
 import type { Quote, Lead, Organization, Contact } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
@@ -181,23 +185,54 @@ export default function QuotesClient({
       key: 'actions',
       header: 'Acciones',
       sticky: 'right' as const,
-      render: (item: Quote) => (
-        <div className="flex gap-2">
-          <button className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors">
-            <Download className="w-4 h-4" />
-          </button>
-          {item.linkPropuesta && (
-            <a
-              href={item.linkPropuesta}
-              target="_blank"
-              rel="noreferrer"
+      render: (item: Quote) => {
+        const lead    = leads.find((l) => l.id === item.leadId);
+        const contact = lead ? contacts.find((c) => c.id === lead.contactoId) : null;
+        const email   = contact?.correo1 ?? '';
+        const subject = encodeURIComponent(`Cotización ${item.id} — BioActiva`);
+        const body = encodeURIComponent(
+          `Estimado(a) ${item.dirigidoA},\n\n` +
+          `Adjuntamos la cotización ${item.id} correspondiente al servicio:\n` +
+          `${item.servicio}\n\n` +
+          `Monto: ${formatCurrency(item.monto, item.moneda)}\n` +
+          (item.linkPropuesta ? `\nPropuesta extendida: ${item.linkPropuesta}\n` : '') +
+          `\nQuedamos atentos a sus comentarios.\n\n` +
+          `Cordialmente,\n${item.remitente}\nBioActiva`,
+        );
+        const mailto = email
+          ? `mailto:${email}?subject=${subject}&body=${body}`
+          : `mailto:?subject=${subject}&body=${body}`;
+
+        return (
+          <div className="flex gap-1">
+            <Link
+              href={`/quotes/${item.id}/print`}
+              title="Imprimir / PDF"
               className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors"
             >
-              <ExternalLink className="w-4 h-4" />
+              <Printer className="w-4 h-4" />
+            </Link>
+            <a
+              href={mailto}
+              title={email ? `Enviar a ${email}` : 'Enviar al cliente'}
+              className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors"
+            >
+              <Mail className="w-4 h-4" />
             </a>
-          )}
-        </div>
-      ),
+            {item.linkPropuesta && (
+              <a
+                href={item.linkPropuesta}
+                target="_blank"
+                rel="noreferrer"
+                title="Abrir propuesta extendida"
+                className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
