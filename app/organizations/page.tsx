@@ -518,7 +518,10 @@ export default function OrganizationsPage() {
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Contacto vigente</label>
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                Contacto vigente
+                <span className="ml-2 normal-case text-text-muted font-normal text-[10px]">Opcional</span>
+              </label>
               <input
                 type="text"
                 value={form.contactoVigente}

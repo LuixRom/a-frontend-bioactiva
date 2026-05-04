@@ -5,6 +5,7 @@ import {
   Search, Plus, Bell, Building2, Users, Kanban,
   AlertTriangle, Clock, CalendarDays, X, ChevronRight,
 } from 'lucide-react';
+import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
 import { getInitials } from '@/src/lib/utils';
@@ -12,9 +13,10 @@ import { useGlobalSearch } from '@/src/hooks/useGlobalSearch';
 import { mockLeads, mockOrganizations } from '@/src/lib/mockData';
 import { getAlertLevel } from '@/src/lib/alertLevel';
 import { cn } from '@/src/lib/utils';
+import { useNotificationStore } from '@/src/store/notificationStore';
 
 export default function TopBar() {
-  const { userName, userEmail } = useAuthStore();
+  const { userName, userEmail, role } = useAuthStore();
   const router   = useRouter();
   const pathname = usePathname();
   const displayName = userName || userEmail || 'Usuario';
@@ -36,35 +38,22 @@ export default function TopBar() {
   // ── Notification bell ────────────────────────────────────────────────────
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
-  const [dismissed, setDismissed] = useState<Set<string>>(new Set());
 
-  const dismissOne = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation(); // evitar navegar al pipeline al hacer clic en ✕
-    setDismissed(prev => new Set(prev).add(id));
+  const { notifications, markAsRead, markAllAsRead, getMyNotifications } = useNotificationStore();
+  const myNotifications = useMemo(() => getMyNotifications(userEmail, role), [notifications, userEmail, role, getMyNotifications]);
+  const unreadNotifications = useMemo(() => myNotifications.filter(n => !n.leida), [myNotifications]);
+  const readNotifications = useMemo(() => myNotifications.filter(n => n.leida), [myNotifications]);
+
+  const totalAlerts = unreadNotifications.length;
+
+  const handleDismissOne = (id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    markAsRead(id);
   };
 
-  const dismissAll = () => {
-    setDismissed(new Set(weekAlerts.map(l => l.id)));
+  const handleDismissAll = () => {
+    markAllAsRead();
   };
-
-  // Leads with activity due this week (next 7 days + overdue)
-  const weekAlerts = useMemo(() => {
-    const now  = new Date();
-    const end  = new Date(now);
-    end.setDate(end.getDate() + 7);
-
-    return mockLeads
-      .filter(l => {
-        if (!l.fechaProximaActividad) return false;
-        const d = new Date(l.fechaProximaActividad);
-        return d <= end; // overdue or within 7 days
-      })
-      .sort((a, b) => {
-        const da = new Date(a.fechaProximaActividad!).getTime();
-        const db = new Date(b.fechaProximaActividad!).getTime();
-        return da - db;
-      });
-  }, []);
 
   // ── Click-outside handler for both dropdowns ─────────────────────────────
   useEffect(() => {
@@ -86,10 +75,6 @@ export default function TopBar() {
     setBellOpen(false);
     setQuery('');
   };
-
-  const dangerCount  = weekAlerts.filter(l => !dismissed.has(l.id) && getAlertLevel(l.fechaProximaActividad) === 'danger').length;
-  const visibleAlerts = weekAlerts.filter(l => !dismissed.has(l.id));
-  const totalAlerts   = visibleAlerts.length;
 
   return (
     <header className="h-16 flex items-center justify-between px-6 bg-surface border-b border-border-subtle sticky top-0 z-20">
@@ -193,10 +178,7 @@ export default function TopBar() {
           >
             <Bell className="w-5 h-5" />
             {totalAlerts > 0 && (
-              <span className={cn(
-                'absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full text-[10px] font-black text-white flex items-center justify-center px-1',
-                dangerCount > 0 ? 'bg-red-500' : 'bg-amber-400'
-              )}>
+              <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] rounded-full text-[10px] font-black text-white flex items-center justify-center px-1 bg-red-500 animate-pulse">
                 {totalAlerts}
               </span>
             )}
@@ -204,89 +186,109 @@ export default function TopBar() {
 
           {/* Notification dropdown */}
           {bellOpen && (
-            <div className="absolute top-full right-0 mt-2 w-80 bg-surface border border-border-subtle rounded-2xl shadow-premium z-50 overflow-hidden">
+            <div className="absolute top-full right-0 mt-2 w-80 bg-surface border border-border-subtle rounded-2xl shadow-premium z-50 overflow-hidden select-none">
               {/* Header */}
               <div className="flex items-center justify-between px-4 py-3 bg-app-bg/50 border-b border-border-subtle">
                 <div className="flex items-center gap-2">
                   <CalendarDays className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-bold text-text uppercase tracking-wider">Esta semana</span>
+                  <span className="text-xs font-bold text-text uppercase tracking-wider">Notificaciones</span>
                 </div>
                 {totalAlerts > 0 && (
                   <span className="text-[10px] font-bold text-text-muted">
-                    {totalAlerts} actividad{totalAlerts !== 1 ? 'es' : ''}
+                    {totalAlerts} por leer
                   </span>
                 )}
               </div>
 
               {/* Items */}
               <div className="max-h-72 overflow-y-auto divide-y divide-border-subtle">
-                {visibleAlerts.length === 0 ? (
+                {myNotifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 text-text-muted">
                     <CalendarDays className="w-8 h-8 mb-2 opacity-30" />
-                    <p className="text-xs font-medium">Sin actividades pendientes</p>
+                    <p className="text-xs font-medium">No hay notificaciones</p>
                   </div>
                 ) : (
-                  visibleAlerts.map(lead => {
-                    const level = getAlertLevel(lead.fechaProximaActividad);
-                    const org   = mockOrganizations.find(o => o.id === lead.organizacionId);
-                    const fecha = lead.fechaProximaActividad
-                      ? new Date(lead.fechaProximaActividad).toLocaleDateString('es-PE', {
-                          weekday: 'short', day: 'numeric', month: 'short',
-                        })
-                      : '';
-
-                    return (
-                      <div key={lead.id} className="relative group">
-                        <button
-                          onClick={() => go('/pipeline')}
-                          className="w-full flex items-start gap-3 px-4 py-3 hover:bg-app-bg text-left transition-colors pr-9"
-                        >
-                          {/* Alert icon */}
-                          <div className={cn(
-                            'mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0',
-                            level === 'danger'  ? 'bg-red-50'   : 'bg-amber-50'
-                          )}>
-                            {level === 'danger'
-                              ? <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                              : <Clock         className="w-3.5 h-3.5 text-amber-500" />}
+                  <>
+                    {/* Sección "Sin leer" */}
+                    {unreadNotifications.length > 0 && (
+                      <div>
+                        <p className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider bg-app-bg/30 border-b border-border-subtle flex items-center justify-between">
+                          <span>Sin leer</span>
+                          <span className="w-2 h-2 rounded-full bg-red-500"></span>
+                        </p>
+                        {unreadNotifications.map(n => (
+                          <div key={n.id} className="relative group">
+                            <button
+                              onClick={() => {
+                                markAsRead(n.id);
+                                if (n.linkUrl) go(n.linkUrl);
+                              }}
+                              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-app-bg text-left transition-colors pr-9"
+                            >
+                              <div className="mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-red-50">
+                                <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-bold text-text truncate">{n.titulo}</p>
+                                <p className="text-[10px] text-text-muted mt-0.5 whitespace-normal break-words">{n.mensaje}</p>
+                                <p className="text-[9px] font-semibold mt-1 text-primary">
+                                  {new Date(n.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}
+                                </p>
+                              </div>
+                            </button>
+                            <button
+                              onClick={(e) => handleDismissOne(n.id, e)}
+                              title="Marcar como leída"
+                              className="absolute top-2.5 right-2.5 w-5 h-5 rounded-md flex items-center justify-center text-text-muted hover:text-text hover:bg-app-bg opacity-0 group-hover:opacity-100 transition-all"
+                            >
+                              <X className="w-3 h-3" />
+                            </button>
                           </div>
-
-                          {/* Content */}
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-bold text-text truncate">{org?.nombre ?? lead.organizacionId}</p>
-                            <p className="text-[10px] text-text-muted truncate mt-0.5">{lead.proximaActividad || 'Actividad pendiente'}</p>
-                            <p className={cn(
-                              'text-[10px] font-bold mt-1',
-                              level === 'danger' ? 'text-red-500' : 'text-amber-500'
-                            )}>
-                              {level === 'danger' ? '⚠ Vencida · ' : ''}
-                              {fecha}
-                            </p>
-                          </div>
-                        </button>
-
-                        {/* Botón descartar individual */}
-                        <button
-                          onClick={(e) => dismissOne(lead.id, e)}
-                          title="Descartar notificación"
-                          className="absolute top-2.5 right-2.5 w-5 h-5 rounded-md flex items-center justify-center text-text-muted hover:text-text hover:bg-app-bg opacity-0 group-hover:opacity-100 transition-all"
-                        >
-                          <X className="w-3 h-3" />
-                        </button>
+                        ))}
                       </div>
-                    );
-                  })
+                    )}
+
+                    {/* Sección "Leídas" */}
+                    {readNotifications.length > 0 && (
+                      <div className="bg-app-bg/10">
+                        <p className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider bg-app-bg/30 border-b border-border-subtle">
+                          Leídas
+                        </p>
+                        {readNotifications.map(n => (
+                          <div key={n.id} className="relative group">
+                            <button
+                              onClick={() => {
+                                if (n.linkUrl) go(n.linkUrl);
+                              }}
+                              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-app-bg text-left transition-colors opacity-70"
+                            >
+                              <div className="mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-50">
+                                <Clock className="w-3.5 h-3.5 text-gray-500" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-xs font-semibold text-text truncate">{n.titulo}</p>
+                                <p className="text-[10px] text-text-muted mt-0.5 whitespace-normal break-words">{n.mensaje}</p>
+                                <p className="text-[9px] font-normal mt-1 text-text-muted">
+                                  {new Date(n.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}
+                                </p>
+                              </div>
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
                 )}
               </div>
 
               {/* Footer */}
-              {visibleAlerts.length > 0 ? (
+              {unreadNotifications.length > 0 ? (
                 <div className="px-4 py-3 border-t border-border-subtle bg-app-bg/30 flex items-center justify-between gap-2">
                   <button
-                    onClick={dismissAll}
+                    onClick={handleDismissAll}
                     className="text-xs font-bold text-text-muted hover:text-text transition-colors"
                   >
-                    Limpiar todas
+                    Marcar todas como leídas
                   </button>
                   <button
                     onClick={() => go('/pipeline')}
@@ -310,7 +312,7 @@ export default function TopBar() {
         </div>
 
         {/* ── User profile ── */}
-        <div className="flex items-center gap-2.5 pl-1 pr-1 py-1 rounded-xl border border-border-subtle bg-app-bg/30">
+        <Link href="/profile" className="flex items-center gap-2.5 pl-1 pr-1 py-1 rounded-xl border border-border-subtle bg-app-bg/30 hover:bg-app-bg transition-colors cursor-pointer">
           <div className="flex flex-col items-end hidden lg:flex">
             <span className="text-sm font-bold text-text leading-tight">{displayName}</span>
             <span className="text-[10px] uppercase font-semibold text-text-muted tracking-wider">Bioactiva CRM</span>
@@ -318,7 +320,7 @@ export default function TopBar() {
           <div className="w-9 h-9 rounded-lg flex items-center justify-center font-bold text-sm text-white bg-primary shadow-sm">
             {initials}
           </div>
-        </div>
+        </Link>
       </div>
     </header>
   );

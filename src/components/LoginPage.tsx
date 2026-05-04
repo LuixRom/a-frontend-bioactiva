@@ -4,8 +4,10 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
 import { Eye, EyeOff, Leaf } from 'lucide-react';
+import { mockUsers } from '@/src/lib/mockData';
 
 export default function LoginPage() {
+  const router = useRouter();
   const { login } = useAuthStore();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,18 +22,21 @@ export default function LoginPage() {
 
     await new Promise((r) => setTimeout(r, 600));
 
-    const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL;
-    const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+    // Demo authentication: check if user exists in mockUsers
+    // Para la demo, cualquier contraseña es válida (ej. '123456')
+    const user = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
 
-    if (email === demoEmail && password === demoPassword) {
-      // Derive display name from email (before the @)
-      const name = email.split('@')[0]
-        .split('.')
-        .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-        .join(' ');
-      login('demo-token-bioactiva', email, name);
+    if (user) {
+      if (user.active === false) {
+        setError('Esta cuenta está inactiva. Contacta al administrador.');
+      } else {
+        const timeStr = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
+        user.lastLogin = `Hoy ${timeStr}`;
+        login('demo-token-bioactiva', user.email, user.name, user.rol);
+        router.push('/');
+      }
     } else {
-      setError('Correo o contraseña incorrectos');
+      setError('Correo no encontrado. Usa un correo de la lista de usuarios.');
     }
 
     setLoading(false);

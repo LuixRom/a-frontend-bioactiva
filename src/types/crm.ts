@@ -43,8 +43,10 @@ export interface Activity {
   estado: 'pendiente' | 'realizada';
   nota: string;
   responsable: string;
-  fecha: Date;
+  fechaInicio: Date;
+  fechaFin?: Date;
   fechaCompletada?: Date;
+  linkReunion?: string;
 }
 
 // Lead
@@ -83,6 +85,22 @@ export interface Quote {
   estado: 'enviada' | 'aceptada' | 'rechazada' | 'pendiente';
   remitente: string;
   observacion?: string;
-  linkPropuesta?: string;
   creadoEn: Date;
+}
+
+// Notificación
+export interface Notification {
+  id: string;
+  tipo: 'actividad_vencida' | 'lead_asignado' | 'cotizacion_aceptada' | 
+        'cotizacion_rechazada' | 'lead_cerrado' | 'alerta_admin' | 'general';
+  titulo: string;
+  mensaje: string;
+  fecha: Date;
+  leida: boolean;
+  destinatario: {
+    tipo: 'usuario' | 'rol' | 'global';
+    userId?: string;        // email del usuario específico
+    rol?: 'Administrador' | 'Trabajador';
+  };
+  linkUrl?: string;         // link a donde redirige al hacer click
 }

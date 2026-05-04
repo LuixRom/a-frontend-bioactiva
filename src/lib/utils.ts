@@ -37,3 +37,25 @@ export function relativeTime(date: string | Date): string {
   if (diff < 86400) return `Hace ${Math.floor(diff / 3600)} h`;
   return `Hace ${Math.floor(diff / 86400)} días`;
 }
+
+export function generateIcsFile({ title, description, start, end }: { title: string; description: string; start: Date; end?: Date }): string {
+  const formatDate = (d: Date) => {
+    return d.toISOString().replace(/[-:]/g, '').split('.')[0] + 'Z';
+  };
+  const startStr = formatDate(start);
+  const endStr = end ? formatDate(end) : startStr;
+  
+  const icsContent = `BEGIN:VCALENDAR
+VERSION:2.0
+CALSCALE:GREGORIAN
+BEGIN:VEVENT
+SUMMARY:${title}
+DESCRIPTION:${description}
+DTSTART:${startStr}
+DTEND:${endStr}
+END:VEVENT
+END:VCALENDAR`;
+
+  const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+  return URL.createObjectURL(blob);
+}
