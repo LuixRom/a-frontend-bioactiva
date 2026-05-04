@@ -11,13 +11,9 @@ import { useToast } from '@/src/components/ui/Toast';
 import { cn } from '@/src/lib/utils';
 import { useAuthStore } from '@/src/store/authStore';
 import { getActivityStatus, syncLeadNextActivity } from '@/src/lib/activityStatus';
+import { ESTADOS_LEAD } from '@/src/lib/constants';
 
-const ESTADOS = [
-  { value: 'en_prospecto',     label: 'En prospecto' },
-  { value: 'ofertado',         label: 'Ofertado' },
-  { value: 'cierre_con_venta', label: 'Cierre con venta' },
-  { value: 'cierre_sin_venta', label: 'Cierre sin venta' },
-] as const;
+const ESTADOS = ESTADOS_LEAD.map(({ id, label }) => ({ value: id, label }));
 
 const ACTIVITY_TIPOS = [
   { value: 'reunion', label: 'Reunión' },

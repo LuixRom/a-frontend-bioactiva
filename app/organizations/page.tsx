@@ -154,8 +154,12 @@ export default function OrganizationsPage() {
       ubicacion: form.ubicacion.trim() || undefined,
       actividades: form.actividades.trim() || undefined,
       linkedin: form.linkedin.trim() || undefined,
-      alianzas: form.alianzas.trim() || undefined,
-      contactoVigente: form.contactoVigente.trim() || undefined,
+      alianzas: form.alianzas.trim()
+        ? form.alianzas.split(',').map((s) => s.trim()).filter(Boolean)
+        : undefined,
+      contactoVigente: form.contactoVigente.trim() === ''
+        ? undefined
+        : form.contactoVigente.trim().toLowerCase() !== 'buscar contacto',
       creadoEn: new Date(),
     };
 

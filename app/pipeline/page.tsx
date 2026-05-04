@@ -13,13 +13,9 @@ import { exportToCsv } from '@/src/lib/exportCsv';
 import Drawer from '@/src/components/ui/Drawer';
 import OrgTypeahead from '@/src/components/ui/OrgTypeahead';
 import { generateLeadId } from '@/src/lib/generateId';
+import { ESTADOS_LEAD } from '@/src/lib/constants';
 
-const COLUMNAS = [
-  { id: 'en_prospecto',     label: 'En prospecto',     color: '#6B7280' },
-  { id: 'ofertado',         label: 'Ofertado',         color: '#F59E0B' },
-  { id: 'cierre_con_venta', label: 'Cierre con venta', color: '#10B981' },
-  { id: 'cierre_sin_venta', label: 'Cierre sin venta', color: '#EF4444' },
-] as const;
+const COLUMNAS = ESTADOS_LEAD;
 
 const emptyLeadForm = {
   organizacionId: '',
@@ -34,7 +30,7 @@ const emptyLeadForm = {
   proximaActividad: '',
   fechaProximaActividad: '',
   fechaCierre: '',
-  estado: 'en_prospecto' as Lead['estado'],
+  estado: 'nuevo' as Lead['estado'],
 };
 
 export default function PipelinePage() {

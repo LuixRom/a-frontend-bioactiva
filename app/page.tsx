@@ -13,14 +13,10 @@ import { getAlertLevel } from '@/src/lib/alertLevel';
 import Timeline from '@/src/components/ui/Timeline';
 import LeadPanel from '@/src/components/pipeline/LeadPanel';
 import type { Lead } from '@/src/types/crm';
+import { ESTADOS_LEAD } from '@/src/lib/constants';
 import { cn } from '@/src/lib/utils';
 
-const COLUMNAS = [
-  { id: 'en_prospecto',     label: 'En prospecto',     color: '#6B7280' },
-  { id: 'ofertado',         label: 'Ofertado',         color: '#F59E0B' },
-  { id: 'cierre_con_venta', label: 'Cierre con venta', color: '#10B981' },
-  { id: 'cierre_sin_venta', label: 'Cierre sin venta', color: '#EF4444' },
-] as const;
+const COLUMNAS = ESTADOS_LEAD;
 
 const thisMonth = new Date().getMonth();
 const thisYear  = new Date().getFullYear();
@@ -57,10 +53,10 @@ export default function DashboardPage() {
   const [leads, setLeads] = useState(mockLeads);
 
   const metrics = useMemo(() => {
-    const active     = leads.filter(l => !['cierre_con_venta', 'cierre_sin_venta'].includes(l.estado));
+    const active     = leads.filter(l => !['cerrado_ganado', 'cerrado_perdido'].includes(l.estado));
     const withAlert  = leads.filter(l => getAlertLevel(l.fechaProximaActividad) !== 'none');
-    const ganados    = leads.filter(l => l.estado === 'cierre_con_venta').length;
-    const perdidos   = leads.filter(l => l.estado === 'cierre_sin_venta').length;
+    const ganados    = leads.filter(l => l.estado === 'cerrado_ganado').length;
+    const perdidos   = leads.filter(l => l.estado === 'cerrado_perdido').length;
     const tasaCierre = ganados + perdidos > 0
       ? Math.round((ganados / (ganados + perdidos)) * 100)
       : 0;
