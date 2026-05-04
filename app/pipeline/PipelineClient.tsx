@@ -7,6 +7,7 @@ import { Plus, Download } from 'lucide-react';
 import type { Lead, Organization, Contact } from '@/src/types/crm';
 import { KanbanColumn } from '@/src/components/pipeline/KanbanColumn';
 import LeadPanel from '@/src/components/pipeline/LeadPanel';
+import CloseLeadDialog from '@/src/components/pipeline/CloseLeadDialog';
 import FilterPanel, {
   applyFilters,
   emptyFilters,
@@ -17,6 +18,7 @@ import { exportToCsv } from '@/src/lib/exportCsv';
 import Drawer from '@/src/components/ui/Drawer';
 import OrgTypeahead from '@/src/components/ui/OrgTypeahead';
 import { ESTADOS_LEAD } from '@/src/lib/constants';
+import { useAuthStore } from '@/src/store/authStore';
 import {
   updateLeadEstado,
   createLead,
@@ -25,21 +27,39 @@ import {
 
 const COLUMNAS = ESTADOS_LEAD;
 
-const emptyLeadForm = {
+type LeadFormState = {
+  organizacionId: string;
+  contactoId: string;
+  servicioInteres: string;
+  comentarios: string;
+  desafioOportunidad: string;
+  historial: string;
+  encargado: string;
+  encargadoEmail: string;
+  canal: string;
+  proximaActividad: string;
+  fechaProximaActividad: string;
+  fechaCierre: string;
+  estado: Lead['estado'];
+};
+
+const buildEmptyLeadForm = (
+  defaults: { encargado?: string; encargadoEmail?: string } = {},
+): LeadFormState => ({
   organizacionId: '',
   contactoId: '',
   servicioInteres: '',
   comentarios: '',
   desafioOportunidad: '',
   historial: '',
-  encargado: '',
-  encargadoEmail: '',
+  encargado:      defaults.encargado      ?? '',
+  encargadoEmail: defaults.encargadoEmail ?? '',
   canal: '',
   proximaActividad: '',
   fechaProximaActividad: '',
   fechaCierre: '',
-  estado: 'nuevo' as Lead['estado'],
-};
+  estado: 'nuevo',
+});
 
 interface PipelineClientProps {
   initialLeads: Lead[];
@@ -55,12 +75,31 @@ export default function PipelineClient({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const { showToast } = useToast();
+  const userName  = useAuthStore((s) => s.userName);
+  const userEmail = useAuthStore((s) => s.userEmail);
+
+  const defaultsForNewLead = useMemo(
+    () => ({
+      encargado:      userName  ?? 'Karien Díaz',
+      encargadoEmail: userEmail ?? '',
+    }),
+    [userName, userEmail],
+  );
 
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [showNewLead, setShowNewLead] = useState(false);
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
-  const [leadForm, setLeadForm] = useState(emptyLeadForm);
+  const [leadForm, setLeadForm] = useState<LeadFormState>(() =>
+    buildEmptyLeadForm(defaultsForNewLead),
+  );
+
+  /** Lead pendiente de confirmar cierre (vía drag o panel). */
+  const [closingState, setClosingState] = useState<{
+    lead: Lead;
+    targetEstado: 'cerrado_ganado' | 'cerrado_perdido';
+    previousEstado: Lead['estado'];
+  } | null>(null);
 
   const filteredLeads = useMemo(
     () => applyFilters(leads, organizations, filters),
@@ -84,7 +123,23 @@ export default function PipelineClient({
       const newStatus = destination.droppableId as Lead['estado'];
       const previousStatus = source.droppableId as Lead['estado'];
 
-      // Optimistic update
+      // Si el destino es un estado "cerrado_*", pedir confirmación antes
+      // de tocar la DB. La tarjeta se queda visualmente en el destino
+      // (optimistic) hasta que el usuario confirme o cancele.
+      if (newStatus === 'cerrado_ganado' || newStatus === 'cerrado_perdido') {
+        const lead = leads.find((l) => l.id === draggableId);
+        if (!lead) return;
+
+        // Movimiento visual previo al diálogo
+        setLeads((prev) =>
+          prev.map((l) => (l.id === draggableId ? { ...l, estado: newStatus } : l)),
+        );
+
+        setClosingState({ lead: { ...lead, estado: newStatus }, targetEstado: newStatus, previousEstado: previousStatus });
+        return;
+      }
+
+      // Resto de transiciones: actualización directa con optimistic.
       setLeads((prev) =>
         prev.map((l) => (l.id === draggableId ? { ...l, estado: newStatus } : l)),
       );
@@ -93,7 +148,6 @@ export default function PipelineClient({
         const updated = await updateLeadEstado(draggableId, newStatus);
         setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
       } catch {
-        // Revert
         setLeads((prev) =>
           prev.map((l) =>
             l.id === draggableId ? { ...l, estado: previousStatus } : l,
@@ -102,8 +156,47 @@ export default function PipelineClient({
         showToast('Error al actualizar el estado del lead', 'error');
       }
     },
-    [showToast],
+    [leads, showToast],
   );
+
+  const handleCloseConfirm = useCallback(
+    async (fechaCierre: Date) => {
+      if (!closingState) return;
+      const { lead, targetEstado } = closingState;
+      try {
+        const updated = await updateLeadEstado(lead.id, targetEstado, fechaCierre);
+        setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
+        showToast(
+          targetEstado === 'cerrado_ganado'
+            ? '🎉 Lead cerrado como ganado'
+            : 'Lead cerrado como perdido',
+          'success',
+        );
+      } catch {
+        // Revert visual al estado previo
+        setLeads((prev) =>
+          prev.map((l) =>
+            l.id === lead.id ? { ...l, estado: closingState.previousEstado } : l,
+          ),
+        );
+        showToast('Error al cerrar el lead', 'error');
+      } finally {
+        setClosingState(null);
+      }
+    },
+    [closingState, showToast],
+  );
+
+  const handleCloseCancel = useCallback(() => {
+    if (!closingState) return;
+    // Revertir el movimiento visual
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === closingState.lead.id ? { ...l, estado: closingState.previousEstado } : l,
+      ),
+    );
+    setClosingState(null);
+  }, [closingState]);
 
   const handleLeadUpdate = useCallback((updated: Lead) => {
     setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
@@ -139,9 +232,9 @@ export default function PipelineClient({
   );
 
   const resetLeadForm = useCallback(() => {
-    setLeadForm(emptyLeadForm);
+    setLeadForm(buildEmptyLeadForm(defaultsForNewLead));
     setShowNewLead(false);
-  }, []);
+  }, [defaultsForNewLead]);
 
   const handleLeadCreate = useCallback(() => {
     if (
@@ -173,7 +266,7 @@ export default function PipelineClient({
         const created = await createLead(input);
         setLeads((prev) => [created, ...prev]);
         setSelectedLead(created);
-        setLeadForm(emptyLeadForm);
+        setLeadForm(buildEmptyLeadForm(defaultsForNewLead));
         setShowNewLead(false);
         showToast('Lead creado correctamente', 'success');
         router.refresh();
@@ -184,7 +277,7 @@ export default function PipelineClient({
         );
       }
     });
-  }, [leadForm, router, showToast]);
+  }, [leadForm, router, showToast, defaultsForNewLead]);
 
   const panelOrg = selectedLead
     ? organizations.find((o) => o.id === selectedLead.organizacionId)
@@ -248,6 +341,14 @@ export default function PipelineClient({
         isOpen={!!selectedLead}
         onClose={() => setSelectedLead(null)}
         onLeadUpdate={handleLeadUpdate}
+      />
+
+      <CloseLeadDialog
+        isOpen={!!closingState}
+        lead={closingState?.lead ?? null}
+        targetEstado={closingState?.targetEstado ?? null}
+        onConfirm={handleCloseConfirm}
+        onCancel={handleCloseCancel}
       />
 
       <Drawer isOpen={showNewLead} onClose={resetLeadForm} title="Nuevo Lead">

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, Download, ExternalLink, TrendingUp, CheckCircle2, Clock, ArrowUpRight } from 'lucide-react';
 import { formatCurrency, formatDate, cn } from '@/src/lib/utils';
@@ -9,6 +9,7 @@ import DataTable from '@/src/components/ui/DataTable';
 import Drawer from '@/src/components/ui/Drawer';
 import { createQuote } from '@/src/server/actions/quotes';
 import { useToast } from '@/src/components/ui/Toast';
+import { useAuthStore } from '@/src/store/authStore';
 type QuoteEstado = Quote['estado'];
 
 interface QuotesClientProps {
@@ -30,7 +31,23 @@ const MESES = [
   'Julio','Agosto','Setiembre','Octubre','Noviembre','Diciembre',
 ];
 
-const initialForm = {
+type QuoteFormState = {
+  leadId: string;
+  ruc: string;
+  dirigidoA: string;
+  cliente: string;
+  producto: string;
+  servicio: string;
+  monto: string;
+  moneda: 'PEN' | 'USD';
+  estado: QuoteEstado;
+  remitente: string;
+  observacion: string;
+  linkPropuesta: string;
+  fechaCotizacion: string;
+};
+
+const buildInitialQuoteForm = (defaults: { remitente?: string } = {}): QuoteFormState => ({
   leadId:        '',
   ruc:           '',
   dirigidoA:     '',
@@ -38,13 +55,13 @@ const initialForm = {
   producto:      '',
   servicio:      '',
   monto:         '',
-  moneda:        'PEN' as 'PEN' | 'USD',
-  estado:        'enviada' as QuoteEstado,
-  remitente:     '',
+  moneda:        'PEN',
+  estado:        'enviada',
+  remitente:     defaults.remitente ?? '',
   observacion:   '',
   linkPropuesta: '',
   fechaCotizacion: new Date().toISOString().slice(0, 10),
-};
+});
 
 export default function QuotesClient({
   initialQuotes,
@@ -55,10 +72,18 @@ export default function QuotesClient({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const { showToast } = useToast();
+  const userName = useAuthStore((s) => s.userName);
+  const remitenteDefault = userName ?? 'Karien Díaz';
+
+  const initialFormWithDefaults = useMemo(
+    () => buildInitialQuoteForm({ remitente: remitenteDefault }),
+    [remitenteDefault],
+  );
+
   const [quotesList, setQuotesList] = useState<Quote[]>(initialQuotes);
   const [statusFilter, setStatusFilter] = useState<QuoteEstado | 'todos'>('todos');
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState<QuoteFormState>(initialFormWithDefaults);
 
   const filtered = quotesList.filter(
     (q) => statusFilter === 'todos' || q.estado === statusFilter
@@ -203,7 +228,7 @@ export default function QuotesClient({
         });
         setQuotesList((prev) => [created, ...prev]);
         setShowCreate(false);
-        setForm(initialForm);
+        setForm(buildInitialQuoteForm({ remitente: remitenteDefault }));
         showToast('Cotización creada', 'success');
         router.refresh();
       } catch (err) {

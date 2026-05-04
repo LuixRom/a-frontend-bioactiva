@@ -43,18 +43,22 @@ export async function getLeadByCodigo(codigo: string): Promise<Lead | null> {
 
 /**
  * Cambia el estado de un lead. Si pasa a un estado cerrado y no tenía
- * fecha de cierre, se la asignamos al momento del cambio.
+ * fecha de cierre, se la asignamos al momento del cambio (a menos que
+ * el caller la provea explícitamente).
  */
 export async function updateLeadEstado(
   codigo: string,
   nuevoEstado: EstadoLead,
+  fechaCierre?: Date | string,
 ): Promise<Lead> {
   const isCerrado = nuevoEstado === 'cerrado_ganado' || nuevoEstado === 'cerrado_perdido';
+  const cierre = isCerrado ? (toDate(fechaCierre) ?? new Date()) : null;
+
   const updated = await prisma.lead.update({
     where: { codigo },
     data: {
       estado: nuevoEstado,
-      ...(isCerrado ? { fechaCierre: new Date() } : {}),
+      ...(isCerrado ? { fechaCierre: cierre } : {}),
     },
     include: {
       actividades: { orderBy: { fecha: 'asc' } },

@@ -1,8 +1,9 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
-import { Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Loader2, CheckCircle2, XCircle, AlertTriangle } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
+import { validateRuc, rucValidationMessage } from '@/src/lib/rucValidator';
 
 // ── Typed response shape from the SUNAT proxy ──────────────────────────────
 export interface SunatData {
@@ -49,10 +50,23 @@ export default function SunatInput({
   // Stable reference for onSuccess to avoid re-triggering the effect
   const stableOnSuccess = useCallback(onSuccess, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Validación local (módulo 11) antes de gastar la llamada a SUNAT.
+  const validation = useMemo(() => validateRuc(value), [value]);
+  const validationMsg = rucValidationMessage(validation);
+
   useEffect(() => {
     const isValidLength = value.length === 11;
 
     if (!isValidLength) {
+      setLoading(false);
+      setSuccess(false);
+      setError(false);
+      return;
+    }
+
+    // Si el formato/checksum local falla, no consultamos SUNAT — sería
+    // un request desperdiciado y la respuesta sería "no encontrado".
+    if (!validation.ok) {
       setLoading(false);
       setSuccess(false);
       setError(false);
@@ -98,9 +112,10 @@ export default function SunatInput({
       clearTimeout(debounce);
       controller.abort();
     };
-  }, [value, stableOnSuccess]);
+  }, [value, stableOnSuccess, validation.ok]);
 
   const isValidLength = value.length === 11;
+  const showFormatWarning = isValidLength && !validation.ok && !loading;
   const sourceLabel = 'SUNAT (RUC)';
 
   return (
@@ -140,6 +155,7 @@ export default function SunatInput({
           {loading && <Loader2 className="w-5 h-5 text-primary animate-spin" />}
           {success && <CheckCircle2 className="w-5 h-5 text-primary animate-fade-in" />}
           {error   && <XCircle    className="w-5 h-5 text-red-500 animate-fade-in" />}
+          {showFormatWarning && <AlertTriangle className="w-5 h-5 text-amber-500 animate-fade-in" />}
         </div>
       </div>
 
@@ -156,6 +172,11 @@ export default function SunatInput({
       {error && (
         <p className="text-[10px] font-semibold text-red-500 ml-1">
           No se encontraron datos en {sourceLabel}.
+        </p>
+      )}
+      {showFormatWarning && validationMsg && (
+        <p className="text-[10px] font-semibold text-amber-600 ml-1">
+          ⚠ {validationMsg}
         </p>
       )}
     </div>
