@@ -3,7 +3,7 @@
  * Datos representativos basados en el modelo nuevo
  */
 
-import { Organization, Contact, Lead, Quote } from '@/src/types/crm';
+import { Organization, Contact, Lead, Quote, Notification } from '@/src/types/crm';
 
 // ──────────────────────────────────────────────
 // ORGANIZACIONES
@@ -154,7 +154,7 @@ export const mockLeads: Lead[] = [
         estado: 'realizada',
         nota: 'Reunión inicial. Cliente interesado en fondos concursables para I+D en café.',
         responsable: 'Karien Diaz',
-        fecha: new Date('2025-01-12'),
+        fechaInicio: new Date('2025-01-12'),
         fechaCompletada: new Date('2025-01-12'),
       },
       {
@@ -163,7 +163,7 @@ export const mockLeads: Lead[] = [
         estado: 'realizada',
         nota: 'Envío de propuesta técnica y cotización (COT-2025-001).',
         responsable: 'Karien Diaz',
-        fecha: new Date('2025-01-20'),
+        fechaInicio: new Date('2025-01-20'),
         fechaCompletada: new Date('2025-01-20'),
       },
     ],
@@ -188,7 +188,7 @@ export const mockLeads: Lead[] = [
         estado: 'realizada',
         nota: 'Llamada de presentación de servicios. Interés confirmado.',
         responsable: 'Administración',
-        fecha: new Date('2025-01-18'),
+        fechaInicio: new Date('2025-01-18'),
         fechaCompletada: new Date('2025-01-18'),
       },
       {
@@ -197,7 +197,7 @@ export const mockLeads: Lead[] = [
         estado: 'pendiente',
         nota: 'Envío de propuesta (COT-2025-002). Pendiente respuesta.',
         responsable: 'Administración',
-        fecha: new Date('2025-02-05'),
+        fechaInicio: new Date('2025-02-05'),
       },
     ],
     creadoEn: new Date('2025-01-15'),
@@ -222,7 +222,7 @@ export const mockLeads: Lead[] = [
         estado: 'pendiente',
         nota: 'Presentación de servicios ante Sub-Gerencia. Solicitan cotización detallada.',
         responsable: 'Karien Diaz',
-        fecha: new Date('2025-03-10'),
+        fechaInicio: new Date('2025-03-10'),
       },
     ],
     creadoEn: new Date('2025-02-01'),
@@ -300,4 +300,60 @@ export const mockQuotes: Quote[] = [
     observacion: 'Incluye levantamiento de gastos en I+D y expediente técnico completo.',
     creadoEn: new Date('2025-03-15'),
   },
+];
+
+
+// ──────────────────────────────────────────────
+// USUARIOS (ROLES)
+// ──────────────────────────────────────────────
+export type CRMUser = {
+  id: number;
+  name: string;
+  email: string;
+  active: boolean;
+  lastLogin: string;
+  rol: 'Administrador' | 'Trabajador';
+};
+
+export const mockUsers: CRMUser[] = [
+  { id: 1, name: 'Karien Diaz',     email: 'karien@bioactiva.pe',    active: true,  lastLogin: 'Hoy 09:15',   rol: 'Trabajador' },
+  { id: 2, name: 'Administración',  email: 'admin@bioactiva.pe',     active: true,  lastLogin: 'Hoy 08:40',   rol: 'Administrador' },
+  { id: 3, name: 'Ana Rojas',       email: 'arojas@bioactiva.pe',    active: true,  lastLogin: 'Ayer 17:30',  rol: 'Trabajador' },
+  { id: 4, name: 'Luis Torres',     email: 'ltorres@bioactiva.pe',   active: true,  lastLogin: 'Hoy 10:00',   rol: 'Trabajador' },
+  { id: 5, name: 'María Quispe',    email: 'mquispe@bioactiva.pe',   active: true,  lastLogin: 'Hace 2 días', rol: 'Trabajador' },
+  { id: 6, name: 'Carlos Mamani',   email: 'cmamani@bioactiva.pe',   active: true,  lastLogin: 'Hoy 07:55',   rol: 'Trabajador' },
+  { id: 7, name: 'Rosa Condori',    email: 'rcondori@bioactiva.pe',  active: false, lastLogin: 'Hace 1 sem.', rol: 'Trabajador' },
+];
+
+export const mockNotifications: Notification[] = [
+  {
+    id: 'notif-001',
+    tipo: 'lead_asignado',
+    titulo: 'Nuevo lead asignado',
+    mensaje: 'Se te ha asignado el lead de Altomayo.',
+    fecha: new Date('2026-05-01'),
+    leida: false,
+    destinatario: { tipo: 'usuario', userId: 'karien@bioactiva.pe' },
+    linkUrl: '/pipeline'
+  },
+  {
+    id: 'notif-002',
+    tipo: 'alerta_admin',
+    titulo: 'Revisión de metas del mes',
+    mensaje: 'Por favor revisar el reporte de ventas mensual.',
+    fecha: new Date('2026-05-02'),
+    leida: false,
+    destinatario: { tipo: 'rol', rol: 'Administrador' },
+    linkUrl: '/profile'
+  },
+  {
+    id: 'notif-003',
+    tipo: 'general',
+    titulo: 'Nuevo CRM habilitado',
+    mensaje: 'El nuevo sistema CRM de Bioactiva ya está activo.',
+    fecha: new Date('2026-05-03'),
+    leida: true,
+    destinatario: { tipo: 'global' },
+    linkUrl: '/'
+  }
 ];

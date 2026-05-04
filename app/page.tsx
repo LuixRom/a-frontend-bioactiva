@@ -89,7 +89,7 @@ export default function DashboardPage() {
     const all = leads.flatMap(l => l.actividades.map(a => ({
       ...a,
       estado: a.estado,
-      fecha: a.fecha instanceof Date ? a.fecha : new Date(a.fecha),
+      fecha: a.fechaInicio instanceof Date ? a.fechaInicio : new Date(a.fechaInicio),
     })));
     return all.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, 10);
   }, [leads]);
