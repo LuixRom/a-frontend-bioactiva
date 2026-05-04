@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "prisma:generate": "prisma generate",
-    "seed": "prisma db seed"
+    "seed": "prisma db seed",
+    "seed:excel": "tsx prisma/seed-from-excel.ts",
+    "seed:excel:dry": "tsx prisma/seed-from-excel.ts --dry-run"
   },
   "dependencies": {
     "@azure/msal-browser": "^5.9.0",
