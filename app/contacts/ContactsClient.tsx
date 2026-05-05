@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare } from 'lucide-react';
+import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare, Sparkles } from 'lucide-react';
+import Link from 'next/link';
 import { getInitials } from '@/src/lib/utils';
 import { VOCATIVOS } from '@/src/lib/constants';
 import type { Contact, Organization, Lead } from '@/src/types/crm';
@@ -131,12 +132,22 @@ export default function ContactsClient({
       key: 'actions',
       header: 'Acciones',
       render: (item: Contact) => (
-        <button
-          onClick={() => setSelectedContactId(item.id)}
-          className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors"
-        >
-          <ExternalLink className="w-4 h-4" />
-        </button>
+        <div className="flex gap-1">
+          <Link
+            href={`/pipeline?prefillContact=${encodeURIComponent(item.id)}`}
+            title="Convertir en lead"
+            className="p-1.5 rounded-lg hover:bg-amber-50 text-text-muted hover:text-amber-600 transition-colors"
+          >
+            <Sparkles className="w-4 h-4" />
+          </Link>
+          <button
+            onClick={() => setSelectedContactId(item.id)}
+            title="Ver perfil"
+            className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors"
+          >
+            <ExternalLink className="w-4 h-4" />
+          </button>
+        </div>
       ),
     },
   ];
@@ -315,10 +326,18 @@ export default function ContactsClient({
                 <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white text-2xl font-black shadow-premium">
                   {getInitials(`${selectedContact.nombres} ${selectedContact.apellidos}`)}
                 </div>
-                <div>
+                <div className="flex-1">
                   <h3 className="text-xl font-bold text-text">{selectedContact.vocativo ? `${selectedContact.vocativo} ` : ''}{selectedContact.nombres} {selectedContact.apellidos}</h3>
                   <p className="text-sm font-bold text-primary uppercase tracking-widest">{selectedContact.cargo}</p>
                 </div>
+                <Link
+                  href={`/pipeline?prefillContact=${encodeURIComponent(selectedContact.id)}`}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all"
+                  title="Crear un lead vinculado a este contacto"
+                >
+                  <Sparkles className="w-3.5 h-3.5" />
+                  Convertir en lead
+                </Link>
               </div>
 
               <div className="grid grid-cols-1 gap-3 pt-4 border-t border-border-subtle">

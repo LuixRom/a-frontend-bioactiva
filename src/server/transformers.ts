@@ -77,10 +77,11 @@ export function toActivity(row: DbActivity): Activity {
   };
 }
 
-type DbLeadFull = DbLead & {
+type DbLeadFull = Omit<DbLead, 'contactoId'> & {
+  contactoId: string | null;
   actividades?: DbActivity[];
   organizacion?: { codigo: string } | DbOrg;
-  contacto?: { codigo: string } | DbContact;
+  contacto?: { codigo: string } | DbContact | null;
 };
 
 export function toLead(
@@ -88,10 +89,15 @@ export function toLead(
   orgCodigoMap?: Map<string, string>,
   contactCodigoMap?: Map<string, string>,
 ): Lead {
+  const contactoCodigo = row.contacto
+    ? row.contacto.codigo
+    : row.contactoId
+      ? contactCodigoMap?.get(row.contactoId)
+      : undefined;
   return {
     id:                    row.codigo,
     organizacionId:        row.organizacion?.codigo ?? orgCodigoMap?.get(row.organizacionId) ?? row.organizacionId,
-    contactoId:            row.contacto?.codigo ?? contactCodigoMap?.get(row.contactoId) ?? row.contactoId,
+    contactoId:            contactoCodigo,
     anio:                  row.anio,
     estado:                row.estado as DbEstadoLead,
     servicioInteres:       toUndef(row.servicioInteres),

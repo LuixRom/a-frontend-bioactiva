@@ -136,7 +136,8 @@ async function nextLeadCodigo(year: number): Promise<string> {
 
 export type LeadCreateInput = {
   organizacionCodigo: string;
-  contactoCodigo: string;
+  /** Opcional: un lead puede crearse "desde cero" sin contacto vinculado. */
+  contactoCodigo?: string | null;
   servicioInteres: string;
   comentarios?: string;
   desafioOportunidad?: string;
@@ -156,12 +157,18 @@ export async function createLead(input: LeadCreateInput): Promise<Lead> {
   });
   if (!org) throw new Error(`Organización "${input.organizacionCodigo}" no existe`);
 
-  const contacto = await prisma.contact.findUnique({
-    where: { codigo: input.contactoCodigo },
-  });
-  if (!contacto) throw new Error(`Contacto "${input.contactoCodigo}" no existe`);
-  if (contacto.organizacionId !== org.id) {
-    throw new Error('El contacto no pertenece a la organización seleccionada');
+  // El contacto es opcional. Si viene, validamos que exista y pertenezca
+  // a la misma organización.
+  let contactoId: string | null = null;
+  if (input.contactoCodigo) {
+    const contacto = await prisma.contact.findUnique({
+      where: { codigo: input.contactoCodigo },
+    });
+    if (!contacto) throw new Error(`Contacto "${input.contactoCodigo}" no existe`);
+    if (contacto.organizacionId !== org.id) {
+      throw new Error('El contacto no pertenece a la organización seleccionada');
+    }
+    contactoId = contacto.id;
   }
 
   const year = new Date().getFullYear();
@@ -171,7 +178,7 @@ export async function createLead(input: LeadCreateInput): Promise<Lead> {
     data: {
       codigo,
       organizacionId:        org.id,
-      contactoId:            contacto.id,
+      contactoId,
       anio:                  year,
       estado:                input.estado ?? 'nuevo',
       servicioInteres:       input.servicioInteres,

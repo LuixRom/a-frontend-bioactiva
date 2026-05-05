@@ -1,11 +1,11 @@
 'use client';
 
+import { memo } from 'react';
 import { Droppable } from '@hello-pangea/dnd';
 import { Plus } from 'lucide-react';
 import type { Lead } from '@/src/types/crm';
 import { KanbanCard } from './KanbanCard';
 import { cn } from '@/src/lib/utils';
-import type { mockOrganizations, mockContacts } from '@/src/lib/mockData';
 
 interface ColumnDef {
   id: string;
@@ -16,23 +16,24 @@ interface ColumnDef {
 interface KanbanColumnProps {
   column: ColumnDef;
   leads: Lead[];
-  organizations: typeof mockOrganizations;
-  contacts: typeof mockContacts;
-  onCardClick: (lead: Lead) => void;
+  /** Mapa orgCodigo → nombre. Estable entre renders (lookup O(1)). */
+  orgNombreById: Map<string, string>;
+  /** Mapa contactoCodigo → "Nombres Apellidos". Estable. */
+  contactoNombreById: Map<string, string>;
+  onCardSelect: (lead: Lead) => void;
   onAddLead: () => void;
 }
 
-export function KanbanColumn({
+function KanbanColumnComponent({
   column,
   leads,
-  organizations,
-  contacts,
-  onCardClick,
+  orgNombreById,
+  contactoNombreById,
+  onCardSelect,
   onAddLead,
 }: KanbanColumnProps) {
   return (
     <div className="flex-shrink-0 w-72 flex flex-col">
-      {/* Column header */}
       <div className="flex items-center justify-between mb-3 px-1">
         <div className="flex items-center gap-2">
           <div className="w-2.5 h-2.5 rounded-full" style={{ background: column.color }} />
@@ -49,7 +50,6 @@ export function KanbanColumn({
         </button>
       </div>
 
-      {/* Droppable area */}
       <Droppable droppableId={column.id}>
         {(provided, snapshot) => (
           <div
@@ -57,23 +57,25 @@ export function KanbanColumn({
             {...provided.droppableProps}
             className={cn(
               'flex-1 min-h-[200px] space-y-3 rounded-2xl p-2 transition-colors duration-200',
-              snapshot.isDraggingOver ? 'bg-primary/5 ring-2 ring-primary/20 ring-dashed' : 'bg-app-bg/50'
+              snapshot.isDraggingOver
+                ? 'bg-primary/5 ring-2 ring-primary/20 ring-dashed'
+                : 'bg-app-bg/50',
             )}
           >
-            {leads.map((lead, index) => {
-              const org = organizations.find(o => o.id === lead.organizacionId);
-              const contact = contacts.find(c => c.id === lead.contactoId);
-              return (
-                <KanbanCard
-                  key={lead.id}
-                  lead={lead}
-                  orgNombre={org?.nombre ?? lead.organizacionId}
-                  contactoNombre={contact ? `${contact.nombres} ${contact.apellidos}` : '—'}
-                  index={index}
-                  onClick={() => onCardClick(lead)}
-                />
-              );
-            })}
+            {leads.map((lead, index) => (
+              <KanbanCard
+                key={lead.id}
+                lead={lead}
+                orgNombre={orgNombreById.get(lead.organizacionId) ?? lead.organizacionId}
+                contactoNombre={
+                  lead.contactoId
+                    ? contactoNombreById.get(lead.contactoId) ?? '—'
+                    : 'Sin contacto'
+                }
+                index={index}
+                onSelect={onCardSelect}
+              />
+            ))}
 
             {leads.length === 0 && !snapshot.isDraggingOver && (
               <div className="flex flex-col items-center justify-center h-24 border-2 border-dashed border-border-subtle rounded-xl text-text-muted/40 text-xs italic">
@@ -88,3 +90,5 @@ export function KanbanColumn({
     </div>
   );
 }
+
+export const KanbanColumn = memo(KanbanColumnComponent);

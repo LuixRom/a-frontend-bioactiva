@@ -139,8 +139,11 @@ model Lead {
   organizacionId String
   organizacion   Organization @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
 
-  contactoId String
-  contacto   Contact @relation(fields: [contactoId], references: [id], onDelete: Cascade)
+  // Un lead puede crearse sin contacto vinculado todavía (lead "desde
+  // cero") y conectarse después. Si se elimina el contacto, el lead
+  // queda con contactoId=null en lugar de borrarse.
+  contactoId String?
+  contacto   Contact? @relation(fields: [contactoId], references: [id], onDelete: SetNull)
 
   actividades  Activity[]
   cotizaciones Quote[]

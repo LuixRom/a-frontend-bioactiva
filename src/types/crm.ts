@@ -64,7 +64,8 @@ export interface Activity {
 // Lead
 export interface Lead {
   id: string;                  // "LEAD-2025-001"
-  contactoId: string;
+  /** Un lead puede crearse desde cero (sin contacto) y vincularse después. */
+  contactoId?: string;
   organizacionId: string;
   anio?: number;
   servicioInteres?: string;

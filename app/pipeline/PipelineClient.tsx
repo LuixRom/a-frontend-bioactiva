@@ -65,12 +65,20 @@ interface PipelineClientProps {
   initialLeads: Lead[];
   organizations: Organization[];
   contacts: Contact[];
+  /**
+   * Si el usuario llega desde la página de Contactos con
+   * `?prefillContact=ID00007` la query string se lee en el server y se
+   * pasa acá para abrir el form de nuevo lead con esa org + contacto ya
+   * seleccionados.
+   */
+  prefill?: { organizacionCodigo?: string; contactoCodigo?: string } | null;
 }
 
 export default function PipelineClient({
   initialLeads,
   organizations,
   contacts,
+  prefill,
 }: PipelineClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -88,11 +96,14 @@ export default function PipelineClient({
 
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [showNewLead, setShowNewLead] = useState(false);
+  const [showNewLead, setShowNewLead] = useState(!!prefill);
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
-  const [leadForm, setLeadForm] = useState<LeadFormState>(() =>
-    buildEmptyLeadForm(defaultsForNewLead),
-  );
+  const [leadForm, setLeadForm] = useState<LeadFormState>(() => {
+    const base = buildEmptyLeadForm(defaultsForNewLead);
+    if (prefill?.organizacionCodigo) base.organizacionId = prefill.organizacionCodigo;
+    if (prefill?.contactoCodigo)     base.contactoId     = prefill.contactoCodigo;
+    return base;
+  });
 
   /** Lead pendiente de confirmar cierre (vía drag o panel). */
   const [closingState, setClosingState] = useState<{
@@ -115,6 +126,26 @@ export default function PipelineClient({
     return map;
   }, [filteredLeads]);
 
+  // Mapas estables para que KanbanColumn (memoized) no re-renderice por
+  // referencia cambiada en cada render. Solo se recalculan si cambia
+  // el array origen.
+  const orgNombreById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const o of organizations) m.set(o.id, o.nombre);
+    return m;
+  }, [organizations]);
+
+  const contactoNombreById = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const c of contacts) m.set(c.id, `${c.nombres} ${c.apellidos}`);
+    return m;
+  }, [contacts]);
+
+  // Callbacks estables — críticos para que el drag no se reverta.
+  const handleCardSelect  = useCallback((lead: Lead) => setSelectedLead(lead), []);
+  const handleAddLead     = useCallback(() => setShowNewLead(true), []);
+  const handlePanelClose  = useCallback(() => setSelectedLead(null), []);
+
   const handleDragEnd = useCallback(
     async (result: DropResult) => {
       const { draggableId, destination, source } = result;
@@ -127,15 +158,22 @@ export default function PipelineClient({
       // de tocar la DB. La tarjeta se queda visualmente en el destino
       // (optimistic) hasta que el usuario confirme o cancele.
       if (newStatus === 'cerrado_ganado' || newStatus === 'cerrado_perdido') {
-        const lead = leads.find((l) => l.id === draggableId);
-        if (!lead) return;
-
-        // Movimiento visual previo al diálogo
-        setLeads((prev) =>
-          prev.map((l) => (l.id === draggableId ? { ...l, estado: newStatus } : l)),
-        );
-
-        setClosingState({ lead: { ...lead, estado: newStatus }, targetEstado: newStatus, previousEstado: previousStatus });
+        let movedLead: Lead | undefined;
+        setLeads((prev) => {
+          const next = prev.map((l) => {
+            if (l.id !== draggableId) return l;
+            movedLead = { ...l, estado: newStatus };
+            return movedLead;
+          });
+          return next;
+        });
+        if (movedLead) {
+          setClosingState({
+            lead: movedLead,
+            targetEstado: newStatus,
+            previousEstado: previousStatus,
+          });
+        }
         return;
       }
 
@@ -156,7 +194,7 @@ export default function PipelineClient({
         showToast('Error al actualizar el estado del lead', 'error');
       }
     },
-    [leads, showToast],
+    [showToast], // ← sólo deps estables; `leads` ya no es dependencia
   );
 
   const handleCloseConfirm = useCallback(
@@ -237,9 +275,10 @@ export default function PipelineClient({
   }, [defaultsForNewLead]);
 
   const handleLeadCreate = useCallback(() => {
+    // Solo organización + servicio son obligatorios. El contacto es opcional
+    // porque un lead puede crearse "desde cero".
     if (
       !leadForm.organizacionId ||
-      !leadForm.contactoId ||
       !leadForm.servicioInteres.trim()
     ) {
       return;
@@ -247,7 +286,7 @@ export default function PipelineClient({
 
     const input: LeadCreateInput = {
       organizacionCodigo: leadForm.organizacionId,
-      contactoCodigo: leadForm.contactoId,
+      contactoCodigo: leadForm.contactoId || null,
       servicioInteres: leadForm.servicioInteres.trim(),
       comentarios: leadForm.comentarios.trim() || undefined,
       desafioOportunidad: leadForm.desafioOportunidad.trim() || undefined,
@@ -286,9 +325,7 @@ export default function PipelineClient({
     ? contacts.find((c) => c.id === selectedLead.contactoId)
     : null;
   const canSaveLead = Boolean(
-    leadForm.organizacionId &&
-      leadForm.contactoId &&
-      leadForm.servicioInteres.trim(),
+    leadForm.organizacionId && leadForm.servicioInteres.trim(),
   );
 
   return (
@@ -322,10 +359,10 @@ export default function PipelineClient({
                 key={col.id}
                 column={col}
                 leads={leadsByStatus[col.id] ?? []}
-                organizations={organizations}
-                contacts={contacts}
-                onCardClick={setSelectedLead}
-                onAddLead={() => setShowNewLead(true)}
+                orgNombreById={orgNombreById}
+                contactoNombreById={contactoNombreById}
+                onCardSelect={handleCardSelect}
+                onAddLead={handleAddLead}
               />
             ))}
           </div>
@@ -339,7 +376,7 @@ export default function PipelineClient({
           panelContact ? `${panelContact.nombres} ${panelContact.apellidos}` : '—'
         }
         isOpen={!!selectedLead}
-        onClose={() => setSelectedLead(null)}
+        onClose={handlePanelClose}
         onLeadUpdate={handleLeadUpdate}
       />
 
@@ -385,7 +422,10 @@ export default function PipelineClient({
 
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
-              Contacto <span className="text-red-500">*</span>
+              Contacto{' '}
+              <span className="normal-case text-text-muted font-normal text-[10px]">
+                (opcional — puedes vincular uno después)
+              </span>
             </label>
             <select
               value={leadForm.contactoId}
@@ -397,7 +437,7 @@ export default function PipelineClient({
             >
               <option value="">
                 {leadForm.organizacionId
-                  ? 'Seleccionar contacto...'
+                  ? 'Sin contacto vinculado'
                   : 'Primero selecciona una organización'}
               </option>
               {availableContacts.map((c) => (
@@ -408,9 +448,9 @@ export default function PipelineClient({
               ))}
             </select>
             {leadForm.organizacionId && availableContacts.length === 0 && (
-              <p className="text-xs text-text-muted">
-                Esta organización aún no tiene contactos. Crea uno primero desde
-                la página de Contactos.
+              <p className="text-[10px] text-text-muted">
+                Esta organización aún no tiene contactos registrados — el lead
+                se creará sin contacto.
               </p>
             )}
           </div>

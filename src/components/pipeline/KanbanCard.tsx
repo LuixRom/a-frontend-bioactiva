@@ -1,5 +1,6 @@
 'use client';
 
+import { memo, useCallback } from 'react';
 import { AlertTriangle, Clock, Building2, User, Briefcase } from 'lucide-react';
 import { Draggable } from '@hello-pangea/dnd';
 import type { Lead } from '@/src/types/crm';
@@ -11,11 +12,25 @@ interface KanbanCardProps {
   orgNombre: string;
   contactoNombre: string;
   index: number;
-  onClick: () => void;
+  /**
+   * Recibe el lead en lugar de un closure para que el padre pueda pasar
+   * una referencia ESTABLE (sin closures inline). Esto es crítico para
+   * que `memo` no re-renderice las cards durante un drag — si re-renderizan,
+   * @hello-pangea/dnd aborta el drop.
+   */
+  onSelect: (lead: Lead) => void;
 }
 
-export function KanbanCard({ lead, orgNombre, contactoNombre, index, onClick }: KanbanCardProps) {
+function KanbanCardComponent({
+  lead,
+  orgNombre,
+  contactoNombre,
+  index,
+  onSelect,
+}: KanbanCardProps) {
   const alertLevel = getAlertLevel(lead.fechaProximaActividad);
+
+  const handleClick = useCallback(() => onSelect(lead), [lead, onSelect]);
 
   return (
     <Draggable draggableId={lead.id} index={index}>
@@ -24,7 +39,7 @@ export function KanbanCard({ lead, orgNombre, contactoNombre, index, onClick }: 
           ref={provided.innerRef}
           {...provided.draggableProps}
           {...provided.dragHandleProps}
-          onClick={onClick}
+          onClick={handleClick}
           className={cn(
             'group bg-surface rounded-xl p-4 cursor-pointer transition-all duration-200',
             'border-l-4 shadow-subtle hover:shadow-premium hover:-translate-y-0.5',
@@ -35,7 +50,6 @@ export function KanbanCard({ lead, orgNombre, contactoNombre, index, onClick }: 
           )}
           style={provided.draggableProps.style}
         >
-          {/* Alert indicator */}
           {alertLevel !== 'none' && (
             <div className={cn(
               'flex items-center gap-1.5 text-[10px] font-bold uppercase mb-2 px-2 py-0.5 rounded-full w-fit',
@@ -48,22 +62,18 @@ export function KanbanCard({ lead, orgNombre, contactoNombre, index, onClick }: 
             </div>
           )}
 
-          {/* Lead ID */}
           <p className="text-[10px] font-mono text-text-muted mb-2">{lead.id}</p>
 
-          {/* Organization */}
           <div className="flex items-center gap-1.5 mb-1">
             <Building2 className="w-3.5 h-3.5 text-primary flex-shrink-0" />
             <p className="text-sm font-bold text-text truncate">{orgNombre}</p>
           </div>
 
-          {/* Contact */}
           <div className="flex items-center gap-1.5 mb-1">
             <User className="w-3.5 h-3.5 text-text-muted flex-shrink-0" />
             <p className="text-xs text-text-muted truncate">{contactoNombre}</p>
           </div>
 
-          {/* Service */}
           {lead.servicioInteres && (
             <div className="flex items-center gap-1.5 mt-2">
               <Briefcase className="w-3 h-3 text-text-muted flex-shrink-0" />
@@ -71,7 +81,6 @@ export function KanbanCard({ lead, orgNombre, contactoNombre, index, onClick }: 
             </div>
           )}
 
-          {/* Encargado badge */}
           {lead.encargado && (
             <div className="mt-3 pt-2 border-t border-border-subtle">
               <span className="text-[10px] font-semibold px-2 py-0.5 bg-primary/10 text-primary rounded-full">
@@ -84,3 +93,5 @@ export function KanbanCard({ lead, orgNombre, contactoNombre, index, onClick }: 
     </Draggable>
   );
 }
+
+export const KanbanCard = memo(KanbanCardComponent);
