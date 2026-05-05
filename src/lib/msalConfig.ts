@@ -8,7 +8,6 @@ export const msalConfig: Configuration = {
   },
   cache: {
     cacheLocation: 'localStorage', // Use localStorage to share sessions across tabs
-    storeAuthStateInCookie: false,
   },
 };
 
