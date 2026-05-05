@@ -375,6 +375,7 @@ export default function PipelineClient({
         contactoNombre={
           panelContact ? `${panelContact.nombres} ${panelContact.apellidos}` : '—'
         }
+        contactoEmail={panelContact?.correo1}
         isOpen={!!selectedLead}
         onClose={handlePanelClose}
         onLeadUpdate={handleLeadUpdate}

@@ -460,6 +460,7 @@ export default function DashboardClient({
         contactoNombre={
           panelContact ? `${panelContact.nombres} ${panelContact.apellidos}` : '—'
         }
+        contactoEmail={panelContact?.correo1}
         isOpen={!!selectedLead}
         onClose={() => setSelectedLead(null)}
         onLeadUpdate={(updated) => {
