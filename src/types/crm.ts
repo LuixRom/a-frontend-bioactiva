@@ -85,6 +85,7 @@ export interface Quote {
   estado: 'enviada' | 'aceptada' | 'rechazada' | 'pendiente';
   remitente: string;
   observacion?: string;
+  linkPropuesta?: string;
   creadoEn: Date;
 }
 
