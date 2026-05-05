@@ -125,10 +125,12 @@ export default function LeadPanel({
 
   const handleSave = async () => {
     if (!lead) return;
-    const hasActividad = form.proximaActividad || form.fechaProximaActividad || form.fechaCierre;
-    if (hasActividad) {
-      if (!merged.proximaActividad || !merged.fechaProximaActividad || !merged.fechaCierre) {
-        showToast('Próxima actividad, su fecha y fecha de cierre son obligatorios si se llena uno de ellos', 'error');
+    // Si el usuario llena la próxima actividad, también debe poner la fecha
+    // (y viceversa). La fecha de cierre es independiente.
+    const hasProx = !!form.proximaActividad || !!form.fechaProximaActividad;
+    if (hasProx) {
+      if (!merged.proximaActividad || !merged.fechaProximaActividad) {
+        showToast('Si llenas próxima actividad, su fecha también es obligatoria', 'error');
         return;
       }
     }
@@ -263,7 +265,13 @@ export default function LeadPanel({
   const scheduledActivities = [...lead.actividades].sort((a, b) => new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime());
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={`Lead — ${orgNombre}`} width="w-[45%]">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Lead — ${orgNombre}`}
+      width="w-[45%]"
+      transparentBackground
+    >
       {/* Tabs */}
       <div className="flex gap-1 mb-6 p-1 bg-app-bg/50 rounded-xl border border-border-subtle">
         {(['detalle', 'actividades'] as const).map(tab => (

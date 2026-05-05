@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
 import { Eye, EyeOff, Leaf } from 'lucide-react';
-import { mockUsers } from '@/src/lib/mockData';
+import { verifyCredentials } from '@/src/server/actions/users';
 
 export default function LoginPage() {
   const router = useRouter();
@@ -20,26 +20,21 @@ export default function LoginPage() {
     setError('');
     setLoading(true);
 
-    await new Promise((r) => setTimeout(r, 600));
-
-    // Demo authentication: check if user exists in mockUsers
-    // Para la demo, cualquier contraseña es válida (ej. '123456')
-    const user = mockUsers.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-    if (user) {
-      if (user.active === false) {
-        setError('Esta cuenta está inactiva. Contacta al administrador.');
-      } else {
-        const timeStr = new Date().toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit' });
-        user.lastLogin = `Hoy ${timeStr}`;
-        login('demo-token-bioactiva', user.email, user.name, user.rol);
-        router.push('/');
+    try {
+      const user = await verifyCredentials(email, password);
+      if (!user) {
+        setError('Correo o contraseña incorrectos. Verifica tus credenciales.');
+        return;
       }
-    } else {
-      setError('Correo no encontrado. Usa un correo de la lista de usuarios.');
+      // Token de sesión: para MVP usamos uno demo. En producción esto sería
+      // un JWT firmado o sesión gestionada por NextAuth.
+      login(`session-${user.id}`, user.email, user.name, user.role);
+      router.push('/');
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Error inesperado al ingresar');
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   return (

@@ -47,7 +47,27 @@ enum Moneda {
   USD
 }
 
+enum UserRole {
+  Administrador
+  Trabajador
+}
+
 // ─── Modelos ──────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String // hash bcrypt; nunca exponer al cliente
+  role         UserRole  @default(Trabajador)
+  active       Boolean   @default(true)
+  lastLogin    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
 
 model Organization {
   id              String   @id @default(cuid())

@@ -8,10 +8,14 @@ import LoginPage from '@/src/components/LoginPage';
 import TopBar from '@/src/components/TopBar';
 import { getMsalInstance } from '@/src/lib/msalConfig';
 import { useToast } from '@/src/components/ui/Toast';
+import { useKeepAlive } from '@/src/hooks/useKeepAlive';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, userEmail, setMsToken, setMsAccountUsername } = useAuthStore();
   const { showToast } = useToast();
+  // Mantiene la DB de Neon despierta con un ping cada 4 min mientras
+  // el usuario tenga la app abierta. Evita el "DB durmió" durante demos.
+  useKeepAlive();
   /**
    * Guard against hydration mismatch.
    *
