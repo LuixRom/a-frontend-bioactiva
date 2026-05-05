@@ -21,9 +21,9 @@ export async function POST(
     estado: body.estado,
     nota: body.nota,
     responsable: body.responsable,
-    fechaInicio: new Date(body.fechaInicio),
+    fecha: new Date(body.fecha),
     fechaFin: body.fechaFin ? new Date(body.fechaFin) : undefined,
-    fechaCompletada: body.estado === 'realizada' ? new Date(body.fechaInicio) : undefined,
+    fechaCompletada: body.estado === 'realizada' ? new Date(body.fecha) : undefined,
     linkReunion: body.linkReunion,
   };
 

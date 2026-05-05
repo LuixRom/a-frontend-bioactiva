@@ -43,7 +43,7 @@ export interface Activity {
   estado: 'pendiente' | 'realizada';
   nota: string;
   responsable: string;
-  fechaInicio: Date;
+  fecha: Date;
   fechaFin?: Date;
   fechaCompletada?: Date;
   linkReunion?: string;

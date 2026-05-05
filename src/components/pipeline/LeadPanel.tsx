@@ -69,7 +69,7 @@ export default function LeadPanel({
     estado: 'pendiente' as Activity['estado'],
     nota: '',
     responsable: userName || 'Equipo Bioactiva',
-    fechaInicio: new Date().toISOString().slice(0, 10),
+    fecha: new Date().toISOString().slice(0, 10),
     fechaFin: new Date().toISOString().slice(0, 10),
   });
 
@@ -188,8 +188,8 @@ export default function LeadPanel({
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            startDateTime: new Date(activityForm.fechaInicio).toISOString(),
-            endDateTime: activityForm.fechaFin ? new Date(activityForm.fechaFin).toISOString() : new Date(activityForm.fechaInicio).toISOString(),
+            startDateTime: new Date(activityForm.fecha).toISOString(),
+            endDateTime: activityForm.fechaFin ? new Date(activityForm.fechaFin).toISOString() : new Date(activityForm.fecha).toISOString(),
             subject: activityForm.nota
           })
         });
@@ -227,7 +227,7 @@ export default function LeadPanel({
         estado: 'pendiente',
         nota: '',
         responsable: userName || 'Equipo Bioactiva',
-        fechaInicio: new Date().toISOString().slice(0, 10),
+        fecha: new Date().toISOString().slice(0, 10),
         fechaFin: new Date().toISOString().slice(0, 10),
       });
     } catch {
@@ -264,7 +264,7 @@ export default function LeadPanel({
 
   const fieldClass = 'w-full px-3 py-2.5 bg-app-bg/40 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all';
   const labelClass = 'text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1';
-  const scheduledActivities = [...lead.actividades].sort((a, b) => new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime());
+  const scheduledActivities = [...lead.actividades].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
   return (
     <Drawer isOpen={isOpen} onClose={onClose} title={`Lead — ${orgNombre}`} width="w-[45%]">
@@ -563,8 +563,8 @@ export default function LeadPanel({
                 <label className={labelClass}>Fecha de inicio</label>
                 <input
                   type="date"
-                  value={activityForm.fechaInicio}
-                  onChange={e => setActivityForm(f => ({ ...f, fechaInicio: e.target.value }))}
+                  value={activityForm.fecha}
+                  onChange={e => setActivityForm(f => ({ ...f, fecha: e.target.value }))}
                   className={fieldClass}
                 />
               </div>
@@ -594,7 +594,7 @@ export default function LeadPanel({
                     }
 
                     try {
-                      const start = new Date(activityForm.fechaInicio);
+                      const start = new Date(activityForm.fecha);
                       const end = activityForm.fechaFin ? new Date(activityForm.fechaFin) : new Date(start.getTime() + 60 * 60 * 1000); // 1 hour duration
 
                       const res = await fetch('https://graph.microsoft.com/v1.0/me/events', {
@@ -708,7 +708,7 @@ export default function LeadPanel({
                         <div>
                           <p className="text-sm font-bold text-text">{activity.nota}</p>
                           <p className="text-[10px] text-text-muted uppercase tracking-wider mt-1">
-                            {activity.tipo} · {new Date(activity.fechaInicio).toLocaleDateString('es-PE')}
+                            {activity.tipo} · {new Date(activity.fecha).toLocaleDateString('es-PE')}
                           </p>
                         </div>
                         <span className={cn('px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider', badgeClass)}>
@@ -758,7 +758,7 @@ export default function LeadPanel({
           <Timeline
             items={lead.actividades.map(a => ({
               id: a.id,
-              fecha: a.fechaInicio instanceof Date ? a.fechaInicio : new Date(a.fechaInicio),
+              fecha: a.fecha instanceof Date ? a.fecha : new Date(a.fecha),
               tipo: a.tipo,
               estado: a.estado,
               nota: a.nota,
