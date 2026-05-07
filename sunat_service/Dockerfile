@@ -17,5 +17,5 @@ COPY . .
 # Exponer el puerto de FastAPI
 EXPOSE 8000
 
-# Comando para arrancar el servidor
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+# Comando para arrancar el servidor respetando el puerto de Render
+CMD ["sh", "-c", "uvicorn main:app --host 0.0.0.0 --port ${PORT:-8000}"]
