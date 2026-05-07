@@ -316,13 +316,14 @@ export default function UsersClient({ initialUsers, initialInvitations }: UsersC
       </div>
 
       {activeTab === 'usuarios' ? (
-        className="rounded-2xl overflow-hidden"
-        style={{
-          background: '#fff',
-          border: '1px solid #edfce8',
-          boxShadow: '0 2px 8px rgba(28,126,60,0.06)',
-        }}
-      >
+        <div 
+          className="rounded-2xl overflow-hidden"
+          style={{
+            background: '#fff',
+            border: '1px solid #edfce8',
+            boxShadow: '0 2px 8px rgba(28,126,60,0.06)',
+          }}
+        >
         <table className="w-full">
           <thead>
             <tr style={{ background: '#f8fdf6', borderBottom: '1px solid #edfce8' }}>
