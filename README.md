@@ -1,12 +1,12 @@
 # CRM Interno BioActiva
 
-Sistema CRM web construido para reemplazar el Excel con macros que BioActiva usa actualmente para gestionar su proceso comercial. Centraliza organizaciones, contactos, leads y cotizaciones en una interfaz moderna con pipeline visual, búsqueda SUNAT en tiempo real, gestión de actividades y carga masiva desde Excel.
+Sistema CRM web que reemplaza el Excel con macros que BioActiva usa para gestionar su proceso comercial. Centraliza organizaciones, contactos, leads y cotizaciones en una interfaz moderna con pipeline kanban, búsqueda SUNAT en tiempo real, integración con Microsoft 365 (Outlook + Teams) y persistencia real en Postgres.
 
 ---
 
 ## Contexto del negocio
 
-BioActiva es una consultora peruana de proyectos de innovación (fondos CONCYTEC, Ley 30309, cadenas de valor, etc.). Su proceso comercial completo vivía en un Excel con macros: contactos, organizaciones, leads y cotizaciones en hojas separadas. Los problemas principales:
+BioActiva es una consultora peruana de proyectos de innovación (fondos CONCYTEC, Ley 30309, cadenas de valor, etc.). Su proceso comercial vivía en un Excel con macros: contactos, organizaciones, leads y cotizaciones en hojas separadas. Los problemas principales:
 
 - Registro manual y repetitivo de datos
 - Duplicidad de información entre hojas
@@ -17,147 +17,79 @@ BioActiva es una consultora peruana de proyectos de innovación (fondos CONCYTEC
 
 ---
 
-## Modelo de datos central
-
-La jerarquía del sistema es:
-
-```
-Organización → Contacto(s) → Lead → Cotización(es)
-```
-
-### Organización
-Empresa, entidad pública, ONG o academia con la que BioActiva trabaja o prospecta.
-
-```typescript
-Organization {
-  id: string           // "ORG-2025-001"
-  ruc?: string         // Opcional — no toda org tiene RUC peruano
-  nombre: string       // Nombre corto de trabajo
-  nombreCompleto?: string
-  area?: string        // Área dentro de la org (ej. Gerencia de Innovación)
-  tipo?: string        // Empresa nacional, Gobierno nacional, ONG, Academia…
-  tamano?: string      // Grande, Mediano, Pequeño, Micro
-  sector?: string      // 27 sectores del negocio
-  ubicacion?: string   // Departamento del Perú
-  linkedin?: string
-  alianzas?: string
-  actividades?: string // Actividad económica (desde SUNAT)
-  creadoEn: Date
-}
-```
-
-### Contacto
-Persona específica dentro de una organización. Un contacto no es un lead — es solo quien trabaja ahí.
-
-```typescript
-Contact {
-  id: string           // "CON-2025-001"
-  organizacionId: string
-  vocativo?: string    // Sr., Sra., Srta.
-  nombres: string
-  apellidos: string
-  correo1: string
-  correo2?: string
-  telefono?: string
-  cargo?: string
-  comentarios?: string
-  creadoEn: Date
-}
-```
-
-### Lead
-Oportunidad comercial concreta. Un lead NO es una empresa ni un contacto — es la oportunidad de negocio entre BioActiva y ese contacto/empresa. Una misma empresa puede tener múltiples leads a lo largo del tiempo (servicios distintos, años distintos).
-
-```typescript
-Lead {
-  id: string                 // "LEAD-2025-001"
-  organizacionId: string     // FK → Organization
-  contactoId: string         // FK → Contact (persona a cargo)
-  servicioInteres?: string   // Qué servicio de BioActiva le interesa
-  canal?: string             // Cómo llegó: Referido, LinkedIn, Evento, Web…
-  encargado?: string         // Quién de BioActiva lleva este lead
-  encargadoEmail?: string
-  estado: EstadoLead         // Ver estados abajo
-  desafioOportunidad?: string
-  comentarios?: string       // Notas internas del lead
-  historial?: string         // Resumen de contexto general
-  proximaActividad?: string  // Se sincroniza automáticamente desde actividades
-  fechaProximaActividad?: Date
-  fechaCierre?: Date
-  actividades: Activity[]    // Cronología de interacciones
-  creadoEn: Date
-}
-```
-
-#### Estados del lead (alineados al Excel de BioActiva)
-
-| ID | Label | Significado |
-|---|---|---|
-| `en_prospecto` | En prospecto | Lead identificado, sin propuesta enviada aún |
-| `ofertado` | Ofertado | Se envió cotización, esperando respuesta |
-| `cierre_con_venta` | Cierre con venta | Negocio cerrado exitosamente |
-| `cierre_sin_venta` | Cierre sin venta | Lead cerrado, no prosperó |
-
-### Actividad
-Interacción registrada dentro de un lead. Tiene estado propio derivado de su fecha.
-
-```typescript
-Activity {
-  id: string
-  tipo: 'reunion' | 'llamada' | 'email' | 'otro'
-  estado: 'pendiente' | 'realizada'
-  nota: string
-  responsable: string
-  fecha: Date
-  fechaCompletada?: Date
-}
-```
-
-Estado derivado automáticamente (`activityStatus.ts`):
-- `realizada` → marcada manualmente como completada
-- `vencida` → fecha pasada y aún no realizada
-- `pendiente` → fecha futura
-
-### Cotización
-Propuesta económica enviada al cliente. Siempre pertenece a un lead específico.
-
-```typescript
-Quote {
-  id: string              // "COT-2025-001"
-  leadId: string          // FK → Lead
-  anio: number
-  mes: string             // Enero, Febrero…
-  dirigidoA: string       // Nombre del contacto destinatario
-  fechaCotizacion: Date
-  cliente: string         // Razón social del cliente
-  producto?: string       // Línea de producto BioActiva (ej. Innovasuys)
-  servicio: string        // Descripción del servicio cotizado
-  monto: number
-  moneda: 'PEN' | 'USD'
-  estado: 'enviada' | 'aceptada' | 'rechazada' | 'pendiente'
-  remitente: string       // Quién firma la cotización
-  observacion?: string
-  linkPropuesta?: string  // Link a Drive/archivo
-  creadoEn: Date
-}
-```
-
----
-
 ## Stack técnico
 
 | Capa | Tecnología |
 |---|---|
-| Framework | Next.js 15 (App Router) |
-| UI | React 19, Tailwind CSS |
-| Tipos | TypeScript |
-| Scraping SUNAT | Python 3.12, FastAPI, Playwright (Chromium headless) |
-| Íconos | Lucide React |
+| Framework | Next.js 16 (App Router · Turbopack) |
+| UI | React 19, Tailwind CSS 4 |
+| Tipos | TypeScript 5 |
+| ORM / DB | Prisma 6 + PostgreSQL (Neon serverless) |
+| Auth | NextAuth + bcryptjs (login propio) + MSAL (Microsoft 365) |
+| Estado cliente | Zustand 5 |
+| Forms | react-hook-form 7 |
+| Charts | Recharts 3 |
+| Drag & drop | @hello-pangea/dnd |
 | Excel parsing | SheetJS (xlsx) |
 | Fuzzy matching | string-similarity (Dice coefficient) |
-| Drag & drop | @hello-pangea/dnd |
-| Autenticación | @azure/msal-browser (MSAL) |
-| Integración | Microsoft Graph API (Microsoft Teams) |
+| Iconos | Lucide React |
+| Email | Resend (preparado, post-MVP) |
+| Scraping SUNAT | Python 3.12 + FastAPI + Playwright (microservicio aparte) |
+
+---
+
+## Modelo de datos
+
+Persistencia real en Postgres vía Prisma. Schema en [`prisma/schema.prisma`](prisma/schema.prisma).
+
+### Jerarquía
+
+```
+Organización ←─── Contacto (siempre vinculado a una org)
+     ↑
+     └─── Lead (siempre vinculado a una org · contacto OPCIONAL)
+              ↓
+          Activity[]   (cronología de interacciones)
+              ↓
+          Quote[]      (cotizaciones — pueden tener PDF imprimible)
+```
+
+Un lead puede crearse "desde cero" (sin contacto) y vincularse después. Un contacto se puede convertir en lead con un click desde la página de Contactos.
+
+### User (nuevo, post-MVP)
+
+Tabla real con autenticación y roles, reemplaza el `mockUsers` original.
+
+```prisma
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String              // bcrypt 10 rondas
+  role         UserRole  @default(Trabajador)   // Administrador | Trabajador
+  active       Boolean   @default(true)
+  lastLogin    DateTime?
+}
+```
+
+- Login con email/password validado contra DB
+- Solo administradores pueden gestionar usuarios desde `/users`
+- Cambio de contraseña con confirmación + validación de mínimo 6 caracteres
+
+### Catálogos alineados al Excel real
+
+Los enums del frontend ([src/lib/constants.ts](src/lib/constants.ts)) reflejan los valores literales que BioActiva usa hoy en su Excel:
+
+| Catálogo | Valores |
+|---|---|
+| **Estados de lead** | `nuevo`, `en_proceso`, `cerrado_ganado`, `cerrado_perdido` |
+| **Tipos de organización** | Asociación civil, Cooperativa, Empresa nacional, Empresa pública, Entidad pública, Gremio, Multinacional, Universidad pública |
+| **Tamaño** | Grande, Mediana, Pequeña *(femenino — coincide con el Excel)* |
+| **Sectores** | 14 valores reales del Excel (Agrícola, Innovación, Inversiones, Legal, Alimentos, …) |
+| **Vocativos** | Sr., Sra., Srta., Dr., Dra. |
+| **Canales** | Referido, Evento presencial, Prospección directa, Red profesional, LinkedIn, Web, Otro |
+
+Mapas literales en `ESTADO_LEAD_FROM_EXCEL` y `ESTADO_COTIZACION_FROM_EXCEL` para importación bidireccional.
 
 ---
 
@@ -165,225 +97,274 @@ Quote {
 
 ```
 a-frontend-bioactiva/
-├── app/                              # Páginas Next.js (App Router)
-│   ├── page.tsx                      # Dashboard principal con métricas
-│   ├── organizations/page.tsx        # CRUD organizaciones + SUNAT + historial quotes
-│   ├── contacts/page.tsx             # CRUD contactos
-│   ├── pipeline/page.tsx             # Kanban de leads + formulario creación
-│   ├── quotes/page.tsx               # Registro y gestión de cotizaciones
-│   ├── bulk-upload/page.tsx          # Carga masiva desde Excel (.xlsx)
-│   ├── search/page.tsx               # Búsqueda global
-│   ├── notifications/page.tsx        # Centro de notificaciones
-│   ├── events/page.tsx               # Calendario de actividades
-│   ├── users/page.tsx                # Gestión de usuarios
-│   ├── profile/page.tsx              # Perfil de usuario y vinculación Microsoft Teams
+├── app/                              # App Router de Next.js
+│   ├── page.tsx                      # Server: dashboard
+│   ├── DashboardClient.tsx           # Cliente: KPIs financieros, gráficos
+│   ├── organizations/                # Server + client split
+│   ├── contacts/                     # Server + client split
+│   ├── pipeline/                     # Server + client split (kanban)
+│   ├── quotes/
+│   │   ├── page.tsx                  # Lista de cotizaciones
+│   │   └── [id]/print/               # Vista imprimible con CSS @media print
+│   ├── users/                        # Gestión de usuarios (solo admin)
+│   ├── search/                       # Búsqueda global server-rendered
+│   ├── profile/                      # Perfil + conexión Microsoft
+│   ├── notifications/                # Centro de notificaciones in-app
+│   ├── events/                       # Calendario de actividades
 │   └── api/
-│       ├── search-document/route.ts  # Proxy → SUNAT por RUC
-│       ├── search-nombre/route.ts    # Proxy → SUNAT por razón social
-│       ├── leads/[id]/route.ts       # PATCH estado del lead
-│       ├── leads/[id]/activities/    # POST/PATCH actividades
-│       ├── bulk-import/route.ts      # POST importación masiva
-│       └── notifications/route.ts   # GET notificaciones
+│       ├── health/                   # GET — keep-alive + diagnóstico DB
+│       ├── leads/[id]/               # GET/PATCH lead · activities POST
+│       ├── search-document/          # Proxy → SUNAT por RUC
+│       ├── search-nombre/            # Proxy → SUNAT por razón social
+│       └── notifications/            # GET notificaciones
+│
+├── prisma/
+│   ├── schema.prisma                 # Modelo de datos (8 entidades)
+│   ├── seed-from-excel.ts            # Migración del Excel a Postgres
+│   ├── seed-users.ts                 # Sembrado inicial de 7 usuarios
+│   ├── ping-db.ts                    # Wake-up manual de Neon
+│   ├── verify-import.ts              # Verificación post-migración
+│   └── check-headers.ts / check-quotes.ts  # Helpers de inspección
 │
 ├── src/
-│   ├── types/crm.ts                  # Tipos centrales (Organization, Contact, Lead, Quote, Activity)
+│   ├── server/                       # Capa servidor (Server Actions)
+│   │   ├── db.ts                     # PrismaClient singleton + retry $extends
+│   │   ├── transformers.ts           # Prisma → tipos del frontend
+│   │   └── actions/
+│   │       ├── organizations.ts      # list, create, update
+│   │       ├── contacts.ts           # list, create
+│   │       ├── leads.ts              # list, create, updateLead, updateLeadEstado, addActivity
+│   │       ├── quotes.ts             # list, create, updateQuoteEstado
+│   │       └── users.ts              # list, create, update, updatePassword, verifyCredentials
+│   │
+│   ├── components/
+│   │   ├── AppShell.tsx              # Layout + useKeepAlive
+│   │   ├── Sidebar.tsx
+│   │   ├── TopBar.tsx                # Incluye MicrosoftStatusBadge
+│   │   ├── LoginPage.tsx             # Login real con bcrypt
+│   │   ├── MicrosoftStatusBadge.tsx  # Estado tri-color de conexión MS
+│   │   ├── ui/
+│   │   │   ├── DataTable.tsx         # Tabla genérica con búsqueda + export
+│   │   │   ├── SunatInput.tsx        # Input RUC + validador módulo 11 + lookup
+│   │   │   ├── ValidadorSunat.tsx    # Drawer SUNAT (RUC o razón social)
+│   │   │   ├── Drawer.tsx            # Drawer con prop transparentBackground
+│   │   │   ├── Toast.tsx
+│   │   │   └── Timeline.tsx          # Línea de tiempo de actividades
+│   │   ├── pipeline/
+│   │   │   ├── KanbanColumn.tsx      # memo + Maps O(1)
+│   │   │   ├── KanbanCard.tsx        # memo + portal durante drag
+│   │   │   ├── CloseLeadDialog.tsx   # Modal "¿Confirmar cierre?"
+│   │   │   └── LeadPanel.tsx         # Panel detalle + activities + Teams
+│   │   └── filters/FilterPanel.tsx
+│   │
+│   ├── hooks/
+│   │   ├── useMsGraph.ts             # Cliente Microsoft Graph centralizado
+│   │   ├── useKeepAlive.ts           # Ping a /api/health cada 4 min
+│   │   └── useGlobalSearch.ts
+│   │
 │   ├── lib/
-│   │   ├── constants.ts              # Enums del negocio (vocativos, sectores, departamentos, estados)
-│   │   ├── mockData.ts               # Datos de prueba para desarrollo
-│   │   ├── activityStatus.ts         # Derivar estado de actividad + sincronizar lead
-│   │   ├── excel-mapper.ts           # Tipos de importación + processExcelData()
-│   │   ├── columnMapper.ts           # Normaliza columnas del Excel al modelo CRM
-│   │   ├── deduplication.ts          # Detección de duplicados (exacto + fuzzy 85%)
+│   │   ├── constants.ts              # Catálogos del Excel
+│   │   ├── rucValidator.ts           # Validador módulo 11 peruano
+│   │   ├── activityStatus.ts         # Estado derivado de actividades
+│   │   ├── alertLevel.ts             # Nivel de alerta visual
+│   │   ├── deduplication.ts          # Detección de duplicados (Dice ≥85%)
 │   │   ├── exportCsv.ts              # Exportar tablas a CSV
-│   │   ├── alertLevel.ts             # Nivel de alerta para actividades
-│   │   ├── checkAndNotify.ts         # Lógica de notificaciones
-│   │   ├── buildExportFilename.ts    # Nombres de archivos exportados
-│   │   ├── calendarLink.ts           # Generar links de Google Calendar
-│   │   ├── msalConfig.ts             # Configuración de MSAL para Microsoft Graph
-│   │   └── utils.ts                  # cn() y formatters (currency, date)
-│   └── components/
-│       ├── Sidebar.tsx               # Navegación lateral
-│       ├── ui/
-│       │   ├── DataTable.tsx         # Tabla genérica: búsqueda, orden, paginación, export
-│       │   ├── SunatInput.tsx        # Input RUC con consulta SUNAT automática
-│       │   ├── ValidadorSunat.tsx    # Drawer de consulta SUNAT: por RUC o razón social
-│       │   ├── Drawer.tsx            # Panel lateral deslizante
-│       │   ├── Toast.tsx             # Notificaciones toast
-│       │   └── Timeline.tsx          # Línea de tiempo de actividades del lead
-│       ├── pipeline/
-│       │   ├── KanbanColumn.tsx      # Columna del tablero kanban
-│       │   └── LeadPanel.tsx         # Panel detalle/edición de lead + actividades
-│       └── filters/
-│           └── FilterPanel.tsx       # Filtros del pipeline
+│   │   ├── calendarLink.ts           # Generadores de links de calendario
+│   │   ├── columnMapper.ts           # Mapeo Excel → modelo CRM
+│   │   ├── excel-mapper.ts
+│   │   ├── msalConfig.ts             # Config MSAL
+│   │   └── utils.ts
+│   │
+│   ├── store/                        # Zustand
+│   │   ├── authStore.ts              # token CRM + token MS
+│   │   ├── notificationStore.ts
+│   │   └── usersStore.ts
+│   │
+│   └── types/crm.ts                  # Tipos centrales
 │
 └── sunat_service/                    # Microservicio Python separado
-    ├── main.py                       # FastAPI + Playwright scraper
-    └── requirements.txt
+    ├── main.py                       # FastAPI + Playwright
+    ├── Dockerfile
+    └── flake.nix                     # Para deploy en NixOS
 ```
 
 ---
 
 ## Flujos principales
 
-### Flujo 1 — Crear organización
+### Login y gestión de usuarios
 
-1. Usuario va a **Organizaciones** → "Nueva Organización"
-2. Abre drawer con formulario.
-3. Puede consultar SUNAT de dos formas:
-   - **Por RUC**: ingresa 11 dígitos → sistema llama automáticamente a SUNAT → autocompleta razón social, ubicación, actividades económicas
-   - **Por Razón Social**: escribe nombre de empresa (mín. 3 caracteres) → debounce 500ms → dropdown con resultados SUNAT → al seleccionar uno, dispara búsqueda por RUC para completar todos los campos
-4. Completa campos manuales: tipo, tamaño, sector, departamento, LinkedIn
-5. Guarda → organización aparece en la tabla
+1. Usuario abre la app → ve `/login`
+2. Ingresa email + password → `verifyCredentials` valida contra DB con bcrypt
+3. Cuentas inactivas son rechazadas con mensaje claro
+4. `lastLogin` se actualiza al entrar
+5. Si es Admin → ve menú `/users` con CRUD de usuarios + cambio de password de cualquiera (incluido a sí mismo)
 
-### Flujo 2 — Crear contacto
+**Credenciales por defecto** (sembradas con `prisma/seed-users.ts`):
+- Email: cualquiera de los 7 (ver más abajo)
+- Password: `bioactiva2024`
 
-1. Usuario va a **Contactos** → "Nuevo Contacto"
-2. Selecciona organización existente del dropdown
-3. Completa: vocativo, nombres, apellidos, correo, teléfono, cargo
-4. Guarda → contacto queda vinculado a la organización
+### Conexión con Microsoft 365 (opcional)
 
-### Flujo 3 — Crear lead (oportunidad comercial)
+1. Usuario va a `/profile`
+2. Click en "Conectar con Microsoft" → MSAL `loginRedirect`
+3. El badge en el TopBar muestra el estado:
+   - 🟢 **Conectado** · Teams + Outlook listos
+   - 🟡 **Reconectar** · token expirado
+   - ⚫ **Desconectado** · nunca conectó
 
-1. Usuario va a **Pipeline** → botón "Nuevo Lead" (FAB inferior derecho o encabezado)
-2. Abre drawer con formulario de creación:
-   - **Organización**: dropdown de organizaciones existentes
-   - **Contacto**: dropdown filtrado — solo muestra contactos de la organización seleccionada
-   - **Servicio de interés**: texto libre (ej. "Formulación proyecto CONCYTEC")
-   - **Canal**: Referido, LinkedIn, Evento, Web, Redes sociales, etc.
-   - **Encargado**: quién de BioActiva lleva el lead
-   - **Estado inicial**: por defecto `en_prospecto`
-   - **Comentarios internos**: notas iniciales
-3. Guarda → lead aparece en la columna "En prospecto" del kanban
+4. Cuando hay reunión Teams (en una activity) → **una sola llamada** crea:
+   - Evento en el calendario Outlook del usuario
+   - Reunión Teams adjunta al evento (link Teams en la respuesta)
+   - Invitación al contacto del lead (con botones Aceptar/Rechazar)
 
-### Flujo 4 — Gestionar lead en pipeline (Kanban)
+### Crear organización
 
-El pipeline es un tablero kanban con 4 columnas correspondientes a los estados:
+1. **Organizaciones** → "Nueva Organización"
+2. Drawer con formulario. Modos:
+   - **Por RUC**: 11 dígitos → módulo 11 valida → SUNAT autocompleta nombre, ubicación, actividades
+   - **Por Razón Social**: 3+ caracteres → debounce 500ms → dropdown de coincidencias SUNAT → click selecciona y dispara lookup completo
+
+### Crear contacto / convertir contacto en lead
+
+- **Contactos** → "Nuevo Contacto" → vinculado a una org existente
+- Cada fila de contactos tiene un botón **✨ Convertir en lead** que abre el form de Pipeline con organización + contacto pre-seleccionados
+- También en el panel de detalle del contacto
+
+### Pipeline kanban
+
+Tablero con 4 columnas correspondientes a los estados reales del Excel:
 
 ```
-En prospecto → Ofertado → Cierre con venta
-                        ↘ Cierre sin venta
+Nuevo → En proceso → Cerrado ganado
+                  ↘ Cerrado perdido
 ```
 
-Acciones disponibles:
-- **Drag & drop**: arrastra tarjeta entre columnas para cambiar estado
-- **Clic en tarjeta**: abre panel lateral con detalle completo del lead
-- **Panel de lead**: permite editar datos, ver historial, añadir actividades
+- **Drag & drop** entre columnas con persistencia inmediata
+- Al arrastrar a un estado cerrado, aparece **modal con date picker** ("¿Confirmar cierre con fecha?")
+- Tarjetas con **alerta visual** cuando hay actividades vencidas o próximas (rojo/ámbar)
+- Click en una tarjeta abre el panel lateral con detalle completo
+- Cards usan `createPortal` durante el drag para escapar del scroll horizontal
 
-### Flujo 5 — Registrar actividad en un lead
+### Crear lead "desde cero" o desde contacto
 
-1. Desde panel lateral del lead en Pipeline
-2. Sección "Actividades" muestra cronología existente con estado visual:
-   - Verde = realizada
-   - Naranja = vencida (fecha pasada, no marcada)
-   - Gris = pendiente
-3. Botón "Nueva actividad": tipo (reunión/llamada/email/otro), fecha, nota, responsable
-4. Al guardar, el sistema sincroniza automáticamente `proximaActividad` del lead con la siguiente actividad pendiente no realizada
-5. Cualquier actividad puede marcarse como realizada/pendiente desde el panel
+Form en `/pipeline` → "Nuevo lead":
+- **Organización** obligatoria
+- **Contacto** opcional (puede vincularse después)
+- Servicio de interés, canal, encargado
+- Estado inicial (default: `nuevo`)
 
-### Flujo 6 — Crear cotización
+### Cotización imprimible + envío
 
-1. Usuario va a **Cotizaciones** → "Nueva Cotización"
-2. Abre drawer con formulario:
-   - **Autocompletar desde lead** (dropdown): al seleccionar un lead existente, autocompleta automáticamente cliente (razón social de la org), dirigido a (nombre del contacto con vocativo), y servicio de interés
-   - O busca manualmente por RUC via SUNAT para completar razón social
-3. Campos adicionales: producto, monto, moneda (PEN/USD), estado, remitente, observación, link propuesta, fecha
-4. Guarda → aparece en tabla con todos los campos del Excel original
+1. **Cotizaciones** → "Nueva Cotización" → autocompleta desde lead
+2. Cuando lead estaba `nuevo`, al crear cotización pasa automáticamente a `en_proceso`
+3. Cada cotización tiene 3 botones de acción:
+   - 🖨️ **Imprimir** → `/quotes/[id]/print` con CSS print stylesheet, membrete BioActiva, A4
+   - ✉️ **Enviar al cliente** → `mailto:` con destinatario + cuerpo prellenado *(post-MVP: Outlook Send Mail API con PDF adjunto)*
+   - 🔗 **Link propuesta** → abre el `linkPropuesta` (Drive/etc.)
 
-### Flujo 7 — Ver cotizaciones de una organización
+### Dashboard con KPIs
 
-Desde la página de **Organizaciones**, al seleccionar/abrir una organización, hay una sección "Historial de Cotizaciones" que muestra todas las cotizaciones vinculadas a esa empresa (filtrando por los leads de esa org). Muestra: estado, monto, fecha, dirigido a, remitente.
+8 métricas calculadas en vivo desde la DB:
 
-### Flujo 8 — Consultar SUNAT (validador independiente)
-
-Componente `ValidadorSunat` disponible como drawer independiente. Permite:
-- **Modo RUC**: ingresa RUC de 11 dígitos → muestra todos los campos crudos devueltos por SUNAT
-- **Modo Razón Social**: escribe nombre → dropdown con resultados → seleccionar uno → ver detalle completo
-
-### Flujo 9 — Carga masiva desde Excel
-
-1. Usuario va a **Importar / Exportar**
-2. Arrastra o selecciona archivo `.xlsx`
-3. Sistema:
-   - Parsea con SheetJS
-   - Normaliza nombres de columnas (tolerante a los nombres exactos del Excel de BioActiva)
-   - Extrae organizaciones (de columna `Cliente`), contactos (de `Dirigido a`), leads y cotizaciones
-4. Muestra preview con detección de duplicados:
-   - **Duplicado exacto**: mismo RUC o mismo correo → marcado para omitir por defecto
-   - **Similar**: nombre con ≥85% de similitud (Dice coefficient) → usuario decide
-5. Usuario marca/desmarca qué omitir
-6. Confirma → envía a `/api/bulk-import`
-
-Columnas reconocidas del Excel:
-
-| Columna en Excel | Campo interno |
+| Métrica | Cálculo |
 |---|---|
-| Año | anio |
-| Mes | mes |
-| ID de lead | idLead |
-| # Cotización | idCotizacion |
-| Dirigido a | dirigidoA |
-| Fecha de cotización | fechaCotizacion |
-| Cliente | cliente |
-| Producto | producto |
-| Nombre del servicio | nombreServicio |
-| Monto | monto |
-| Moneda | moneda |
-| Estado del proceso | estadoProceso |
-| Remitente | remitente |
-| Observación | observacion |
-| Link de propuesta | linkPropuesta |
+| Pipeline Value | Σ cotizaciones de leads activos |
+| Ganado total | Σ cotizaciones aceptadas de leads cerrados ganados |
+| Tasa de cierre | `ganados / (ganados + perdidos)` |
+| Ticket promedio | Σ aceptadas / N aceptadas |
+| Leads activos | Conteo |
+| Con alerta | Activities vencidas o próximas |
+| Cotizaciones del mes | Filtradas por `fechaCotizacion` |
+| Organizaciones | Total + N contactos |
+
+Más visualizaciones:
+- Bar chart de leads por etapa
+- Bar chart de cotizaciones por mes (con monto)
+- Top 5 organizaciones por monto cerrado
+- Pie chart de distribución por sector
 
 ---
 
 ## Integración SUNAT
 
-### Por qué existe esta arquitectura
+### Por qué este microservicio
 
-SUNAT no tiene API pública. Toda consulta pasa por un portal web con captcha visual desactivado para RUC pero con iframe. Playwright automatiza Chromium en servidor para scraping. No puede correr en el navegador del usuario — va en Python separado.
+SUNAT no tiene API pública. El portal exige scraping con captcha visual. **Playwright headless** lo automatiza desde un servicio Python aparte.
 
-### Arquitectura en 3 capas
+### Arquitectura
 
 ```
-Navegador (React)
-    ↓ fetch a ruta relativa (no expone el servicio Python)
+Browser (React)
+    ↓ fetch a ruta relativa
 Next.js API Route
-    /api/search-document  →  GET http://127.0.0.1:8000/consultar-ruc?ruc=...
-    /api/search-nombre    →  GET http://127.0.0.1:8000/consultar-nombre?nombre=...
+    /api/search-document  →  GET {SUNAT_SERVICE_URL}/consultar-ruc?ruc=...
+    /api/search-nombre    →  GET {SUNAT_SERVICE_URL}/consultar-nombre?nombre=...
     ↓
-FastAPI Python (localhost:8000)
+FastAPI Python (sunat_service/)
     ↓ Playwright headless Chromium
 Portal SUNAT
-    e-consultaruc.sunat.gob.pe
 ```
 
-### Endpoints del servicio Python
+El microservicio puede correr local (`http://127.0.0.1:8000`) o desplegado (Docker / NixOS).
 
-**`GET /consultar-ruc?ruc=20601234567`**
-Devuelve:
-```json
-{
-  "ruc": "20601234567",
-  "nombre": "ALTOMAYO S.A.C.",
-  "nombreCompleto": "INDUSTRIAS MAYO S.A.C.",
-  "estado": "ACTIVO",
-  "condicion": "HABIDO",
-  "ubicacion": "AV. JAVIER PRADO...",
-  "actividades": "ELABORACION DE CAFE...",
-  "_raw": { ... todos los campos crudos de SUNAT ... }
-}
+### Validador RUC peruano (módulo 11)
+
+Implementado en [`src/lib/rucValidator.ts`](src/lib/rucValidator.ts). Antes de llamar SUNAT, el frontend valida:
+- 11 dígitos numéricos
+- Prefijo válido (10/15/17/20/25)
+- Dígito verificador correcto (algoritmo módulo 11 oficial)
+
+Si el RUC es inválido, **no se hace el request a SUNAT** — error inmediato y claro.
+
+---
+
+## Resiliencia de la base de datos (Neon dormida)
+
+Neon free tier suspende compute tras ~5 min de inactividad. La primera query después de dormir suele fallar con `P1001`/timeout. Se resolvió con 3 capas:
+
+| Capa | Cómo funciona |
+|---|---|
+| **Retry automático en Prisma** ([src/server/db.ts](src/server/db.ts)) | `$extends` envuelve cada query: detecta errores transitorios (`P1001`, `P1002`, `P1008`, `P1017`) y reintenta hasta 3 veces con backoff exponencial. Transparente para las server actions |
+| **`/api/health`** | Endpoint con counts + latencia. Despierta la DB si está dormida |
+| **`useKeepAlive` hook** ([src/hooks/useKeepAlive.ts](src/hooks/useKeepAlive.ts)) | Activado en AppShell. Pingea `/api/health` cada 4 min mientras la app está abierta |
+
+---
+
+## Setup local
+
+### 1. Variables de entorno (`.env`)
+
+```env
+# Postgres (Neon serverless free tier o cualquier Postgres)
+DATABASE_URL="postgresql://user:pass@host/db?sslmode=require"
+
+# Microservicio SUNAT
+SUNAT_SERVICE_URL="http://127.0.0.1:8000"
 ```
 
-**`GET /consultar-nombre?nombre=bioactiva`**
-Devuelve array:
-```json
-[
-  { "ruc": "20601234567", "nombre": "BIOACTIVA SAC", "ubicacion": "LIMA", "estado": "ACTIVO" },
-  ...
-]
-```
-Máximo 20 resultados. La búsqueda por nombre usa los selectores de texto nativos de Playwright (`get_by_text`, `get_by_role`) porque los IDs del portal cambian.
+### 2. Instalación
 
-### Iniciar el servicio SUNAT
+```bash
+npm install
+```
+
+### 3. DB
+
+```bash
+# Aplicar schema a la DB
+npx prisma db push
+
+# Sembrar usuarios iniciales (password 'bioactiva2024')
+npx tsx prisma/seed-users.ts
+
+# Migrar el Excel real (CRM BIACTIVA.xlsx debe estar 4 niveles arriba del repo,
+# o setear EXCEL_PATH=/ruta/al/archivo.xlsx)
+npm run seed:excel
+# Salida: 20 orgs · 20 contactos · 10 leads · 5 cotizaciones · 5 activities sintéticas
+```
+
+### 4. SUNAT (opcional, en otra terminal)
 
 ```bash
 cd sunat_service
@@ -392,150 +373,192 @@ playwright install chromium
 python main.py
 ```
 
-Corre en `http://127.0.0.1:8000`. Requiere Python 3.12 (Python 3.13 tuvo incompatibilidad con greenlet — resuelto con `greenlet>=3.0.0`).
+Corre en `http://127.0.0.1:8000`. También hay `Dockerfile` y `flake.nix`.
 
----
-
-## Variables de entorno
-
-Archivo `.env.local` en raíz:
-
-```env
-NEXT_PUBLIC_DEMO_EMAIL=admin@bioactiva.pe
-NEXT_PUBLIC_DEMO_PASSWORD=bioactiva2024
-SUNAT_SERVICE_URL=http://127.0.0.1:8000
-```
-
----
-
-## Iniciar el frontend
+### 5. Frontend
 
 ```bash
-npm install
 npm run dev
 ```
 
-Abre en `http://localhost:3000`.
+Abre [http://localhost:3000](http://localhost:3000). Login con cualquier email sembrado, password `bioactiva2024`.
 
 ---
 
-## Valores de negocio (alineados al Excel original)
+## Microsoft 365 (opcional)
 
-### Vocativos
-`Sr.` / `Sra.` / `Srta.`
+La integración con MSAL requiere registrar una app en Microsoft Entra ID (Azure portal). [`src/lib/msalConfig.ts`](src/lib/msalConfig.ts):
 
-### Tamaño de organización
-`Grande` / `Mediano` / `Pequeño` / `Micro`
+```ts
+clientId: '...'        // App registration en Entra ID
+authority: '.../{tenantId}'  // Tenant específico, o 'common' para multi-tenant
+redirectUri: 'http://localhost:3000'
+```
 
-### Tipo de organización
-Academia · Empresa internacional · Empresa nacional · Gobierno nacional · Independiente · ONG · Organismo internacional
+**Scopes** (`User.Read`, `Calendars.ReadWrite`, `OnlineMeetings.ReadWrite`).
 
-### Sectores (27)
-Agricultura · Pesca y Minería · Biotecnología · Comercio · Construcción · Consultoría y Servicios Profesionales · Cultura y Arte · Educación · Energía · Finanzas y Seguros · Industria Manufacturera · Industria Textil y Confecciones · Infraestructura y Transporte · Logística y Cadena de Suministro · Medio Ambiente y Sostenibilidad · Minería y Recursos Naturales · Organizaciones sin fines de lucro · Salud y Farmacéutica · Sector Público y Gobierno · Seguridad y Defensa · Tecnología e Innovación · Telecomunicaciones · Turismo y Hospitalidad · Agroindustria / Café · Agroindustria / Cacao · Agtech / Tecnología Agrícola · Gobierno Local
+⚠️ `OnlineMeetings.ReadWrite` requiere admin consent del tenant. Si no está aprobado, las llamadas devuelven `MsConsentRequiredError`.
 
-### Departamentos (25 del Perú)
-Amazonas · Áncash · Apurímac · Arequipa · Ayacucho · Cajamarca · Callao · Cusco · Huancavelica · Huánuco · Ica · Junín · La Libertad · Lambayeque · Lima · Loreto · Madre de Dios · Moquegua · Pasco · Piura · Puno · San Martín · Tacna · Tumbes · Ucayali
+---
+
+## Usuarios sembrados
+
+Todos con password inicial `bioactiva2024`:
+
+| Email | Rol | Estado |
+|---|---|---|
+| `admin@bioactiva.pe` | Administrador | Activo |
+| `karien@bioactiva.pe` | Trabajador | Activo |
+| `arojas@bioactiva.pe` | Trabajador | Activo |
+| `ltorres@bioactiva.pe` | Trabajador | Activo |
+| `mquispe@bioactiva.pe` | Trabajador | Activo |
+| `cmamani@bioactiva.pe` | Trabajador | Activo |
+| `rcondori@bioactiva.pe` | Administrador | Inactivo |
 
 ---
 
 ## Componentes reutilizables clave
 
-### DataTable
-`src/components/ui/DataTable.tsx`
-Tabla genérica con:
-- Búsqueda client-side sobre todos los campos
-- `extraSearchFields` para buscar también en datos relacionados (nombre de org, contacto, etc.)
-- Ordenamiento por columna (asc/desc)
-- Paginación con ellipsis para tablas grandes
-- Contador de resultados filtrados
-- Botón exportar CSV
+### `useMsGraph` ([src/hooks/useMsGraph.ts](src/hooks/useMsGraph.ts))
 
-### SunatInput
-`src/components/ui/SunatInput.tsx`
-Input de RUC que:
-- Dispara consulta automáticamente al completar 11 dígitos
-- Muestra estado: cargando / encontrado / no encontrado / error
-- Devuelve datos normalizados via callback `onSuccess(data: SunatData)`
+Cliente centralizado para Microsoft Graph:
+- `callGraph<T>(path, init)`: fetch wrapper con auth + serialización
+- `ensureToken()`: refresh silent con dedup de requests concurrentes
+- `connect()` / `disconnect()`
+- `status`: `'connected' | 'expired' | 'disconnected'`
+- Errores tipados: `MsNotConnectedError`, `MsConsentRequiredError`, `MsGraphError`
 
-### ValidadorSunat
-`src/components/ui/ValidadorSunat.tsx`
-Drawer de consulta SUNAT completo con toggle de modo:
-- **Por RUC**: input directo, muestra todos los campos crudos de SUNAT en tabla
-- **Por Razón Social**: input con debounce 500ms, dropdown de resultados, al seleccionar dispara consulta por RUC para datos completos
-- Se resetea completamente al cerrar
+### `SunatInput`
 
-### LeadPanel
-`src/components/pipeline/LeadPanel.tsx`
-Panel lateral de detalle del lead con:
-- Datos del lead, organización y contacto
-- Historial de actividades con estado visual (realizada / vencida / pendiente)
-- Formulario para añadir nuevas actividades
-- Botones para marcar actividades como realizadas/pendientes
-- Sincronización automática de `proximaActividad` del lead
+Input de RUC con:
+- Validación módulo 11 antes del lookup
+- Auto-fetch al completar 11 dígitos válidos
+- Estado visual: cargando / encontrado / no encontrado / inválido
+- Callback `onSuccess(data: SunatData)`
+
+### `Drawer`
+
+Panel lateral deslizante con prop opcional `transparentBackground` — útil para paneles de lectura (LeadPanel) donde el usuario quiere ver el dashboard mientras tiene el panel abierto.
+
+### `KanbanCard` / `KanbanColumn`
+
+Memoized para que el drag&drop no re-renderice durante una operación. Card usa `createPortal` durante el drag para escapar de cualquier `overflow:auto` ancestro.
+
+### `MicrosoftStatusBadge`
+
+Visible en TopBar en todas las páginas. Click → `/profile`. Estado tri-color sincronizado con el token MS real.
 
 ---
 
-## Historial de desarrollo
+## Decisiones técnicas
 
-### Base inicial — primer commit
+### Server actions vs API routes
 
-- Scaffold Next.js 15 con Tailwind
-- Estructura de carpetas, tipos CRM, datos mock
-- Páginas base: Dashboard, Organizaciones, Contactos, Pipeline, Cotizaciones
-- Componentes: DataTable, Sidebar, Drawer, Toast, SunatInput (solo RUC)
-- Integración SUNAT por RUC (servicio Python básico)
+Las mutaciones nuevas usan Server Actions (`'use server'`). Los API routes existentes (`/api/leads/*`) se mantienen como adaptadores delgados que llaman a las mismas server actions, así el frontend de main (con MSAL) sigue funcionando.
 
-### 28/04/2026 — Primera tanda (commit c705140)
+### Auth: bcrypt vs MSAL
 
-- **Estados de lead** alineados al Excel: reemplaza los estados técnicos anteriores por `en_prospecto`, `ofertado`, `cierre_con_venta`, `cierre_sin_venta`
-- **Página de Cotizaciones** reescrita: todos los campos del Excel (año, mes, ID lead, dirigido a, cliente, producto, nombre del servicio, monto, moneda, estado, remitente, observación, link), autocompletado desde lead seleccionado, integración SUNAT por RUC
-- **Búsqueda SUNAT por razón social** implementada de extremo a extremo:
-  - `sunat_service/main.py` — scraper `scrape_by_nombre` con selectores correctos de Playwright
-  - `app/api/search-nombre/route.ts` — proxy Next.js
-  - Formulario de organización — toggle RUC/Razón Social con dropdown de resultados
-- `src/lib/constants.ts` — todos los enums del negocio centralizados
-- `src/lib/excel-mapper.ts` — tipos `OrganizationImport`, `ContactImport`, `ProcessedData` + función `processExcelData()`
-- Dashboard actualizado para 4 estados de lead
+- **Login del CRM**: bcrypt (offline, controlado por BioActiva)
+- **MSAL**: solo para integración con Microsoft 365 (Teams, Outlook). Es **opcional** — si el usuario no la conecta, el CRM funciona perfecto sin Teams ni Outlook real
 
-### 28/04/2026 — Segunda tanda (commit d2f1e61)
+### Catálogos como source of truth en `constants.ts`
 
-- **Formulario de creación de leads** en Pipeline (drawer completo):
-  - Selector de organización → filtra contactos de esa org → selección de contacto
-  - Servicio de interés, canal, encargado, comentarios, estado inicial
-- **Gestión de actividades** en LeadPanel:
-  - Campo `estado: 'pendiente' | 'realizada'` en Activity
-  - Campo `fechaCompletada?` al marcar como realizada
-  - Botones marcar realizada/pendiente en cada actividad
-  - Estado derivado automáticamente (vencida si fecha pasada y no realizada)
-- **`src/lib/activityStatus.ts`** — utilidades: `getActivityStatus()`, `getNextPendingActivity()`, `syncLeadNextActivity()`
-- **Historial de cotizaciones en Organizaciones**: sección que muestra todas las quotes de esa org (filtrando leads asociados)
-- Dashboard: muestra estado de actividades recientes
-- Sidebar: "Carga Masiva" renombrado a "Importar / Exportar"
+Los enums viven en TypeScript y se reflejan en Prisma. El Excel real definió los valores, no al revés. Ej: `Tamaño` es `Mediana` (femenino) porque así estaba en el archivo.
 
-### 28/04/2026 — Tercera tanda (commit df8eeee)
+### Migración del Excel = evento único
 
-- **ValidadorSunat** mejorado con modo dual:
-  - Toggle visual "Por RUC" / "Por Razón Social"
-  - Modo razón social: debounce 500ms, dropdown de coincidencias SUNAT, al seleccionar dispara búsqueda por RUC para completar datos completos
-  - Reset completo de estado al cerrar el drawer (`useEffect` en `isOpen`)
-
-### 03/05/2026 — Cuarta tanda (Integración Microsoft & Roles)
-
-- **Gestión de Roles (Administrador vs Trabajador)**:
-  - Separación explícita de permisos según el rol del usuario.
-  - Los usuarios con rol `Administrador` tienen acceso completo, incluyendo la gestión de usuarios (`/users`).
-  - Los usuarios con rol `Trabajador` tienen acceso operativo, excluyendo el acceso a la administración de usuarios.
-- **Integración con Microsoft Teams**:
-  - Implementación de `@azure/msal-browser` para autenticación OAuth con cuentas corporativas Microsoft.
-  - Opción de conectar/desconectar cuenta Microsoft desde el perfil del usuario.
-  - Creación automática de reuniones de Teams para las actividades programadas en el LeadPanel.
-- **Mejoras generales**:
-  - Optimización de la experiencia de usuario con carga de perfil y estado persistente en localStorage/sessionStorage.
+`prisma/seed-from-excel.ts` es **idempotente** (upsert por código) pero pensado para correr una sola vez al setear el sistema. Después, los datos viven y crecen en la DB.
 
 ---
 
-## Estado actual del sistema
+## Estado actual
 
-El frontend corre con datos mock (`src/lib/mockData.ts`). Las operaciones CRUD modifican estado local en React — no hay base de datos persistente todavía. La única integración real con servicio externo es SUNAT (requiere el servicio Python corriendo en puerto 8000).
+### ✅ Funcionando
 
-Los endpoints API (`/api/leads/[id]`, `/api/bulk-import`) están esqueletizados — retornan respuestas simuladas. El siguiente paso natural es conectar a Supabase o similar para persistencia real.
+- Login con bcrypt + 7 usuarios sembrados
+- Las 4 entidades principales (Organizaciones, Contactos, Leads, Cotizaciones) con CRUD completo en DB real
+- Pipeline kanban con drag&drop persistente (sin offset, sin bouncing)
+- Validador RUC peruano (módulo 11)
+- Búsqueda SUNAT por RUC y por razón social
+- Cotización imprimible (CSS print A4 con membrete)
+- Dashboard con 8 KPIs financieros + 4 gráficos
+- Búsqueda global server-rendered
+- Gestión de usuarios completa (CRUD + cambio de password)
+- Healthcheck + retry automático contra Neon dormida
+- Conexión Microsoft con badge de estado en TopBar
+- Reunión Teams + evento Outlook + invitación al contacto en una sola llamada
+- Convertir contacto en lead con un click
+
+### 🟡 Post-MVP (siguiente iteración)
+
+- Enviar cotización por email vía Outlook Send Mail API (con PDF adjunto)
+- Encontrar disponibilidad común (`/me/findMeetingTimes`)
+- Audit log por registro
+- Notificaciones automáticas vía Resend (cron)
+- Importador masivo continuo
+- Catálogo de servicios `Service` como entidad
+- Mobile responsive completo
+
+---
+
+## Microservicio SUNAT (resumen)
+
+**Endpoints expuestos** (FastAPI en `sunat_service/main.py`):
+
+- `GET /consultar-ruc?ruc=20100070970` → ficha completa de SUNAT
+- `GET /consultar-nombre?nombre=alicorp` → array de coincidencias (max 20)
+
+**Ejemplo de respuesta** (`/consultar-ruc`):
+
+```json
+{
+  "ruc": "20100070970",
+  "nombre": "SUPERMERCADOS PERUANOS S.A.",
+  "estado": "ACTIVO",
+  "condicion": "HABIDO",
+  "ubicacion": "CAL.MORELLI NRO. 181 INT. P-2 LIMA - SAN BORJA",
+  "actividades": "Principal - 4711 - VENTA AL POR MENOR…",
+  "_raw": { /* todos los campos crudos del portal */ }
+}
+```
+
+**Notas operativas:**
+- Requiere Python 3.12 (3.13 tiene incompatibilidad con greenlet)
+- El portal SUNAT es lento e inestable — esperar respuesta puede tardar 5-30s
+- Hay rate limiting implícito si se hacen muchas requests seguidas
+- El Excel original tiene RUCs ficticios (CITAGRO `20131545500`, etc.) que NO existen en SUNAT
+
+---
+
+## Comandos útiles
+
+```bash
+# Dev server
+npm run dev
+
+# Build
+npm run build
+
+# Typecheck (sin emitir)
+npx tsc --noEmit
+
+# Lint
+npm run lint
+
+# Prisma
+npx prisma db push           # aplicar schema a DB
+npx prisma studio            # visualizar/editar datos
+npx prisma generate          # regenerar client TS
+
+# Seeds
+npm run seed:excel           # migrar Excel a DB
+npm run seed:excel:dry       # dry-run sin escribir
+npx tsx prisma/seed-users.ts # sembrar usuarios
+
+# Diagnóstico
+npx tsx prisma/ping-db.ts        # despertar Neon dormida
+npx tsx prisma/verify-import.ts  # verificar conteos post-migración
+
+# SUNAT (en otra terminal)
+cd sunat_service && python main.py
+```
