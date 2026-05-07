@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { generateOrgId, generateContactId, generateLeadId } from '@/src/lib/generateId';
 import type { ProcessedData } from '@/src/lib/excel-mapper';
+import type { EstadoLead } from '@/src/lib/constants';
 
 // In-memory store (replace with Prisma inserts in production)
 import { mockOrganizations, mockContacts, mockLeads } from '@/src/lib/mockData';
@@ -57,7 +58,7 @@ export async function POST(req: NextRequest) {
         id,
         organizacionId: org?.id ?? '',
         contactoId: '',
-        estado: (l.estado as 'en_prospecto' | 'ofertado' | 'cierre_con_venta' | 'cierre_sin_venta') || 'en_prospecto',
+        estado: (l.estado as EstadoLead) || 'nuevo',
         actividades: [],
         creadoEn: new Date(),
       });

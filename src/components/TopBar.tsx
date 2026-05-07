@@ -14,6 +14,7 @@ import { mockLeads, mockOrganizations } from '@/src/lib/mockData';
 import { getAlertLevel } from '@/src/lib/alertLevel';
 import { cn } from '@/src/lib/utils';
 import { useNotificationStore } from '@/src/store/notificationStore';
+import MicrosoftStatusBadge from '@/src/components/MicrosoftStatusBadge';
 
 export default function TopBar() {
   const { userName, userEmail, role } = useAuthStore();
@@ -164,6 +165,9 @@ export default function TopBar() {
 
       {/* ── Right: Actions & Profile ── */}
       <div className="flex items-center gap-3">
+
+        {/* ── Microsoft connection status ── */}
+        <MicrosoftStatusBadge />
 
         {/* ── Bell / Notifications ── */}
         <div className="relative" ref={bellRef}>

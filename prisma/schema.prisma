@@ -1,0 +1,204 @@
+// Bioactiva CRM — esquema de dominio
+//
+// Refleja el Excel real de BioActiva (organizaciones, contactos, leads,
+// actividades, cotizaciones). Los enums siguen los catálogos del archivo
+// fuente; ver src/lib/constants.ts.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────
+
+enum EstadoLead {
+  nuevo
+  en_proceso
+  cerrado_ganado
+  cerrado_perdido
+}
+
+enum EstadoActividad {
+  pendiente
+  realizada
+  cancelada
+}
+
+enum TipoActividad {
+  reunion
+  llamada
+  email
+  otro
+}
+
+enum EstadoCotizacion {
+  pendiente
+  enviada
+  aceptada
+  rechazada
+}
+
+enum Moneda {
+  PEN
+  USD
+}
+
+enum UserRole {
+  Administrador
+  Trabajador
+}
+
+// ─── Modelos ──────────────────────────────────────────────────────
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String // hash bcrypt; nunca exponer al cliente
+  role         UserRole  @default(Trabajador)
+  active       Boolean   @default(true)
+  lastLogin    DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([email])
+}
+
+model Organization {
+  id              String   @id @default(cuid())
+  codigo          String   @unique // "ORG-2025-001"
+  ruc             String?
+  nombre          String
+  nombreCompleto  String?
+  area            String?
+  tipo            String? // catálogo abierto, alineado al Excel
+  tamano          String? // Grande / Mediana / Pequeña
+  sector          String? // catálogo abierto, alineado al Excel
+  ubicacion       String? // departamento del Perú
+  linkedin        String?
+  alianzas        String[] @default([])
+  actividades     String? // texto SUNAT
+  contactoVigente Boolean  @default(true)
+
+  contactos Contact[]
+  leads     Lead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([ruc])
+  @@index([nombre])
+}
+
+model Contact {
+  id          String  @id @default(cuid())
+  codigo      String  @unique // "CON-2025-001" o "ID00001" del Excel
+  vocativo    String?
+  nombres     String
+  apellidos   String
+  correo1     String?
+  correo2     String?
+  telefono    String?
+  cargo       String?
+  comentarios String?
+
+  organizacionId String
+  organizacion   Organization @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+
+  leads Lead[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizacionId])
+  @@index([correo1])
+}
+
+model Lead {
+  id                    String     @id @default(cuid())
+  codigo                String     @unique // "LEAD-2025-001"
+  anio                  Int
+  estado                EstadoLead @default(nuevo)
+  servicioInteres       String?
+  comentarios           String?
+  desafioOportunidad    String?
+  canal                 String? // Referido / Evento / LinkedIn / etc.
+  encargado             String? // Karien Díaz / Administración / ...
+  encargadoEmail        String?
+  proximaActividad      String? // sincronizado desde Activities
+  fechaProximaActividad DateTime?
+  alertaManual          Boolean? // override manual de la alerta calculada
+  fechaCierre           DateTime?
+  historialTexto        String? // "Mar-24: Reunión inicial. Abr-24: ..."
+
+  organizacionId String
+  organizacion   Organization @relation(fields: [organizacionId], references: [id], onDelete: Cascade)
+
+  // Un lead puede crearse sin contacto vinculado todavía (lead "desde
+  // cero") y conectarse después. Si se elimina el contacto, el lead
+  // queda con contactoId=null en lugar de borrarse.
+  contactoId String?
+  contacto   Contact? @relation(fields: [contactoId], references: [id], onDelete: SetNull)
+
+  actividades  Activity[]
+  cotizaciones Quote[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([organizacionId])
+  @@index([contactoId])
+  @@index([estado])
+}
+
+model Activity {
+  id              String          @id @default(cuid())
+  tipo            TipoActividad   @default(otro)
+  estado          EstadoActividad @default(pendiente)
+  nota            String
+  responsable     String?
+  fecha           DateTime
+  fechaCompletada DateTime?
+
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([fecha])
+}
+
+model Quote {
+  id              String           @id @default(cuid())
+  codigo          String           @unique // "COT-2025-001"
+  anio            Int
+  mes             String // "Enero" / "Febrero" en español
+  dirigidoA       String
+  fechaCotizacion DateTime
+  cliente         String // razón social usada
+  producto        String? // "Innovasuyu" / "Consultoría tributaria" / ...
+  servicio        String
+  monto           Decimal          @db.Decimal(12, 2)
+  moneda          Moneda           @default(PEN)
+  estado          EstadoCotizacion @default(pendiente)
+  remitente       String
+  observacion     String?
+  linkPropuesta   String?
+
+  leadId String
+  lead   Lead   @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([leadId])
+  @@index([estado])
+  @@index([anio])
+}

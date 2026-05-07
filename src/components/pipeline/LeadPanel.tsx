@@ -10,17 +10,17 @@ import { useToast } from '@/src/components/ui/Toast';
 import { cn } from '@/src/lib/utils';
 import { useAuthStore } from '@/src/store/authStore';
 import { getActivityStatus, syncLeadNextActivity } from '@/src/lib/activityStatus';
+import { ESTADOS_LEAD } from '@/src/lib/constants';
 import Link from 'next/link';
 import { useUsersStore } from '@/src/store/usersStore';
-import { getMsalInstance, loginRequest } from '@/src/lib/msalConfig';
 import { useNotificationStore } from '@/src/store/notificationStore';
+import {
+  useMsGraph,
+  MsNotConnectedError,
+  MsConsentRequiredError,
+} from '@/src/hooks/useMsGraph';
 
-const ESTADOS = [
-  { value: 'en_prospecto',     label: 'En prospecto' },
-  { value: 'ofertado',         label: 'Ofertado' },
-  { value: 'cierre_con_venta', label: 'Cierre con venta' },
-  { value: 'cierre_sin_venta', label: 'Cierre sin venta' },
-] as const;
+const ESTADOS = ESTADOS_LEAD.map(({ id, label }) => ({ value: id, label }));
 
 const ACTIVITY_TIPOS = [
   { value: 'reunion', label: 'Reunión' },
@@ -38,6 +38,12 @@ interface LeadPanelProps {
   lead: Lead | null;
   orgNombre: string;
   contactoNombre: string;
+  /**
+   * Email del contacto vinculado al lead. Cuando se crea una reunión
+   * Teams desde la pestaña Actividades, se incluye automáticamente como
+   * invitado (recibe la invitación oficial con Aceptar/Rechazar).
+   */
+  contactoEmail?: string;
   isOpen: boolean;
   onClose: () => void;
   onLeadUpdate: (updated: Lead) => void;
@@ -47,13 +53,16 @@ export default function LeadPanel({
   lead,
   orgNombre,
   contactoNombre,
+  contactoEmail,
   isOpen,
   onClose,
   onLeadUpdate,
 }: LeadPanelProps) {
-  const { userName, msToken } = useAuthStore();
+  const { userName } = useAuthStore();
   const { showToast } = useToast();
   const { users } = useUsersStore();
+  const { callGraph, isConnected } = useMsGraph();
+
   const [activeTab, setActiveTab] = useState<'detalle' | 'actividades'>('detalle');
   const [saving, setSaving] = useState(false);
   const [savingActivity, setSavingActivity] = useState(false);
@@ -73,53 +82,25 @@ export default function LeadPanel({
     fechaFin: new Date().toISOString().slice(0, 10),
   });
 
-  const refreshTokenIfNeeded = async (): Promise<string | null> => {
-    const { msToken, setMsToken, userEmail } = useAuthStore.getState();
-    let currentToken = msToken;
-    if (typeof window !== 'undefined' && userEmail) {
-      const stored = localStorage.getItem(`ms-token-${userEmail}`);
-      if (stored) currentToken = stored;
+  /**
+   * Convierte un error de Graph en un toast legible para el usuario.
+   * Centraliza los 3 casos típicos: no conectado, sin consentimiento,
+   * y errores genéricos con código.
+   */
+  const handleGraphError = (err: unknown, fallbackMsg: string): void => {
+    if (err instanceof MsNotConnectedError) {
+      showToast('Conecta tu cuenta Microsoft en tu perfil para usar esta función', 'error');
+      return;
     }
-
-    try {
-      const { msAccountUsername } = useAuthStore.getState();
-      const pca = await getMsalInstance();
-      const accounts = pca.getAllAccounts();
-
-      if (accounts.length === 0) {
-        await pca.acquireTokenRedirect(loginRequest);
-        return null;
-      }
-
-      if (accounts.length > 0) {
-        const account = msAccountUsername ? accounts.find(a => a.username === msAccountUsername) : accounts[0];
-        if (!account) {
-          showToast('Reconecta tu cuenta Microsoft en tu perfil', 'error');
-          return null;
-        }
-
-        const silentResult = await pca.acquireTokenSilent({
-          ...loginRequest,
-          account: account,
-        });
-        if (silentResult && silentResult.accessToken) {
-          currentToken = silentResult.accessToken;
-          setMsToken(currentToken);
-          if (userEmail) localStorage.setItem(`ms-token-${userEmail}`, currentToken);
-          return currentToken;
-        }
-      }
-    } catch (err: any) {
-      console.warn('No se pudo renovar token de manera silenciosa, redirigiendo para acquireTokenRedirect:', err.message || err);
-      try {
-        const pca = await getMsalInstance();
-        await pca.acquireTokenRedirect(loginRequest);
-      } catch (redirectErr) {
-        console.error('Error al redirigir para autenticación:', redirectErr);
-      }
-      return null; // detener el flujo, no devolver token viejo
+    if (err instanceof MsConsentRequiredError) {
+      showToast(
+        'Esta función requiere permisos de Microsoft 365 que el administrador del tenant debe aprobar',
+        'error',
+      );
+      return;
     }
-    return currentToken;
+    const msg = err instanceof Error ? err.message : fallbackMsg;
+    showToast(msg, 'error');
   };
 
   if (!lead) return null;
@@ -129,10 +110,12 @@ export default function LeadPanel({
 
   const handleSave = async () => {
     if (!lead) return;
-    const hasActividad = form.proximaActividad || form.fechaProximaActividad || form.fechaCierre;
-    if (hasActividad) {
-      if (!merged.proximaActividad || !merged.fechaProximaActividad || !merged.fechaCierre) {
-        showToast('Próxima actividad, su fecha y fecha de cierre son obligatorios si se llena uno de ellos', 'error');
+    // Si el usuario llena la próxima actividad, también debe poner la fecha
+    // (y viceversa). La fecha de cierre es independiente.
+    const hasProx = !!form.proximaActividad || !!form.fechaProximaActividad;
+    if (hasProx) {
+      if (!merged.proximaActividad || !merged.fechaProximaActividad) {
+        showToast('Si llenas próxima actividad, su fecha también es obligatoria', 'error');
         return;
       }
     }
@@ -147,7 +130,7 @@ export default function LeadPanel({
       const updated: Lead = await res.json();
       onLeadUpdate(updated);
       await checkAndNotify(updated);
-      if (updated.estado === 'cierre_con_venta' && lead.estado !== 'cierre_con_venta') {
+      if (updated.estado === 'cerrado_ganado' && lead.estado !== 'cerrado_ganado') {
         const { addNotification } = useNotificationStore.getState();
         addNotification({
           tipo: 'lead_cerrado',
@@ -166,43 +149,143 @@ export default function LeadPanel({
     }
   };
 
+  /**
+   * Helper compartido por los dos botones "+ Outlook Calendar" del panel
+   * (uno en la pestaña Detalle, otro en Actividades). Crea un evento de
+   * Outlook con la próxima actividad del lead, invitando al contacto si
+   * tiene email registrado.
+   */
+  const addOutlookEventForNextActivity = async (): Promise<boolean> => {
+    if (!merged.fechaProximaActividad) return false;
+    try {
+      const start = new Date(merged.fechaProximaActividad);
+      const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hora
+
+      const attendees: Array<{
+        emailAddress: { address: string; name?: string };
+        type: 'required' | 'optional';
+      }> = [];
+      if (contactoEmail) {
+        attendees.push({
+          emailAddress: { address: contactoEmail, name: contactoNombre || undefined },
+          type: 'required',
+        });
+      }
+
+      await callGraph('/me/events', {
+        method: 'POST',
+        body: {
+          subject: merged.proximaActividad || 'Seguimiento programado',
+          body: {
+            contentType: 'HTML',
+            content:
+              `<p><strong>Lead:</strong> ${lead.id}</p>` +
+              `<p><strong>Organización:</strong> ${orgNombre || '—'}</p>` +
+              (merged.encargado
+                ? `<p><strong>Encargado:</strong> ${merged.encargado}</p>`
+                : ''),
+          },
+          start: { dateTime: start.toISOString(), timeZone: 'America/Lima' },
+          end:   { dateTime: end.toISOString(),   timeZone: 'America/Lima' },
+          attendees,
+        },
+      });
+
+      const msg = attendees.length
+        ? `Evento agregado a Outlook · invitación enviada a ${contactoNombre || contactoEmail}`
+        : 'Evento agregado a tu calendario de Outlook';
+      showToast(msg, 'success');
+      return true;
+    } catch (e) {
+      handleGraphError(e, 'No se pudo agregar a Outlook');
+      return false;
+    }
+  };
+
   const handleAddActivity = async () => {
     if (!lead || !activityForm.nota.trim()) return;
     setSavingActivity(true);
 
     let linkReunion: string | undefined = undefined;
 
-    if (activityForm.tipo === 'reunion' && msToken) {
+    /**
+     * Para actividades tipo "reunión" con Microsoft conectado:
+     * 1 sola llamada a /me/events con `isOnlineMeeting: true` que:
+     *   - Crea el evento en el calendario Outlook del usuario
+     *   - Adjunta una reunión Teams (joinUrl viene en la respuesta)
+     *   - Invita al contacto del lead por email (si tiene correo)
+     *   - El cliente recibe invitación oficial con Aceptar/Rechazar
+     *
+     * Antes eran 2 llamadas (Teams + Outlook) descoordinadas y la
+     * reunión duraba 0 minutos. Ahora respeta fechaFin y dura mínimo
+     * 30 minutos si fechaInicio === fechaFin.
+     */
+    if (activityForm.tipo === 'reunion' && isConnected) {
       try {
-        const token = await refreshTokenIfNeeded();
-        if (!token) {
-          showToast('No se pudo obtener el token de Microsoft', 'error');
-          setSavingActivity(false);
-          return;
+        const start = new Date(activityForm.fechaInicio);
+        let end = activityForm.fechaFin
+          ? new Date(activityForm.fechaFin)
+          : new Date(start);
+        // Si el usuario no marcó fechaFin (o coincide), agendar 30 min
+        if (end.getTime() <= start.getTime()) {
+          end = new Date(start.getTime() + 30 * 60 * 1000);
         }
 
-        const teamsRes = await fetch('https://graph.microsoft.com/v1.0/me/onlineMeetings', {
+        // Construir lista de invitados: el contacto del lead, si tiene
+        // email registrado.
+        const attendees: Array<{
+          emailAddress: { address: string; name?: string };
+          type: 'required' | 'optional';
+        }> = [];
+        if (contactoEmail) {
+          attendees.push({
+            emailAddress: { address: contactoEmail, name: contactoNombre || undefined },
+            type: 'required',
+          });
+        }
+
+        type GraphEventResponse = {
+          id: string;
+          onlineMeeting?: { joinUrl?: string };
+        };
+
+        const event = await callGraph<GraphEventResponse>('/me/events', {
           method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
+          body: {
+            subject: `${activityForm.nota} — ${orgNombre || lead.id}`,
+            body: {
+              contentType: 'HTML',
+              content:
+                `<p><strong>Lead:</strong> ${lead.id}</p>` +
+                `<p><strong>Organización:</strong> ${orgNombre || '—'}</p>` +
+                (lead.servicioInteres
+                  ? `<p><strong>Servicio:</strong> ${lead.servicioInteres}</p>`
+                  : '') +
+                `<p><strong>Encargado:</strong> ${activityForm.responsable}</p>` +
+                (activityForm.nota
+                  ? `<hr/><p>${activityForm.nota}</p>`
+                  : ''),
+            },
+            start: { dateTime: start.toISOString(), timeZone: 'America/Lima' },
+            end:   { dateTime: end.toISOString(),   timeZone: 'America/Lima' },
+            isOnlineMeeting: true,
+            onlineMeetingProvider: 'teamsForBusiness',
+            attendees,
           },
-          body: JSON.stringify({
-            startDateTime: new Date(activityForm.fecha).toISOString(),
-            endDateTime: activityForm.fechaFin ? new Date(activityForm.fechaFin).toISOString() : new Date(activityForm.fecha).toISOString(),
-            subject: activityForm.nota
-          })
         });
-        
-        if (teamsRes.ok) {
-          const meetingData = await teamsRes.json();
-          linkReunion = meetingData.joinWebUrl;
-        } else {
-          showToast('Error al crear la reunión de Teams', 'error');
+
+        linkReunion = event.onlineMeeting?.joinUrl;
+        if (!linkReunion) {
+          showToast(
+            'Reunión creada pero no se obtuvo el link de Teams. Revisa Outlook.',
+            'error',
+          );
+        } else if (attendees.length > 0) {
+          showToast(`Invitación enviada a ${contactoNombre || contactoEmail}`, 'success');
         }
       } catch (e) {
-        console.error("Teams error", e);
-        showToast('Error de conexión con Microsoft Teams', 'error');
+        handleGraphError(e, 'Error al crear la reunión Teams');
+        // Continuamos: la activity se registra igual, sin link de reunión
       }
     }
 
@@ -267,7 +350,13 @@ export default function LeadPanel({
   const scheduledActivities = [...lead.actividades].sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
   return (
-    <Drawer isOpen={isOpen} onClose={onClose} title={`Lead — ${orgNombre}`} width="w-[45%]">
+    <Drawer
+      isOpen={isOpen}
+      onClose={onClose}
+      title={`Lead — ${orgNombre}`}
+      width="w-[45%]"
+      transparentBackground
+    >
       {/* Tabs */}
       <div className="flex gap-1 mb-6 p-1 bg-app-bg/50 rounded-xl border border-border-subtle">
         {(['detalle', 'actividades'] as const).map(tab => (
@@ -406,68 +495,24 @@ export default function LeadPanel({
                     onClick={async () => {
                       if (eventAdded || addingEvent) return;
                       setAddingEvent(true);
-                      console.log('Outlook button clicked, refreshing token...');
-
-                      const currentToken = await refreshTokenIfNeeded();
-                      if (!currentToken) {
-                        showToast('Conecta tu cuenta Microsoft en tu perfil para usar esta función', 'error');
-                        setAddingEvent(false);
-                        return;
-                      }
-
-                      try {
-                        const start = new Date(merged.fechaProximaActividad!);
-                        const end = new Date(start.getTime() + 60 * 60 * 1000); // 1 hour duration
-
-                        const res = await fetch('https://graph.microsoft.com/v1.0/me/events', {
-                          method: 'POST',
-                          headers: {
-                            'Authorization': `Bearer ${currentToken}`,
-                            'Content-Type': 'application/json'
-                          },
-                          body: JSON.stringify({
-                            subject: merged.proximaActividad || 'Seguimiento programado',
-                            body: {
-                              contentType: 'HTML',
-                              content: `Lead: ${lead.id}\nEncargado: ${merged.encargado ?? ''}`
-                            },
-                            start: {
-                              dateTime: start.toISOString(),
-                              timeZone: 'UTC'
-                            },
-                            end: {
-                              dateTime: end.toISOString(),
-                              timeZone: 'UTC'
-                            }
-                          })
-                        });
-                        
-                        if (!res.ok) {
-                          if (res.status === 401) {
-                            throw new Error('Esta función requiere Microsoft 365. Contacta a tu administrador.');
-                          }
-                          const errorMsg = await res.text();
-                          throw new Error(`Graph API respondió ${res.status}: ${errorMsg}`);
-                        }
-                        
-                        setEventAdded(true);
-                        showToast('Evento agregado a tu calendario de Outlook', 'success');
-                      } catch (error: any) {
-                        showToast(error.message || error, 'error');
-                      } finally {
-                        setAddingEvent(false);
-                      }
+                      const ok = await addOutlookEventForNextActivity();
+                      if (ok) setEventAdded(true);
+                      setAddingEvent(false);
                     }}
                     disabled={addingEvent || eventAdded}
                     className={cn(
-                      "mt-3 w-full text-xs font-bold rounded-xl px-3 py-2.5 transition-all flex items-center justify-center gap-2",
+                      'mt-3 w-full text-xs font-bold rounded-xl px-3 py-2.5 transition-all flex items-center justify-center gap-2',
                       eventAdded
-                        ? "bg-green-600 text-white border-green-600 cursor-not-allowed shadow-md"
-                        : "text-primary border border-primary hover:bg-primary/10"
+                        ? 'bg-green-600 text-white border-green-600 cursor-not-allowed shadow-md'
+                        : 'text-primary border border-primary hover:bg-primary/10',
                     )}
                   >
                     <Calendar className="w-4 h-4" />
-                    {addingEvent ? 'Agregando...' : eventAdded ? '✓ Agregado a Outlook' : '+ Outlook Calendar'}
+                    {addingEvent
+                      ? 'Agregando...'
+                      : eventAdded
+                        ? '✓ Agregado a Outlook'
+                        : '+ Outlook Calendar'}
                   </button>
                 )}
               </div>
@@ -585,66 +630,67 @@ export default function LeadPanel({
                   onClick={async () => {
                     if (tabEventAdded || addingTabEvent) return;
                     setAddingTabEvent(true);
-
-                    const currentToken = await refreshTokenIfNeeded();
-                    if (!currentToken) {
-                      showToast('Conecta tu cuenta Microsoft en tu perfil para usar esta función', 'error');
-                      setAddingTabEvent(false);
-                      return;
-                    }
-
                     try {
-                      const start = new Date(activityForm.fecha);
-                      const end = activityForm.fechaFin ? new Date(activityForm.fechaFin) : new Date(start.getTime() + 60 * 60 * 1000); // 1 hour duration
+                      const start = new Date(activityForm.fechaInicio);
+                      const end = activityForm.fechaFin
+                        ? new Date(activityForm.fechaFin)
+                        : new Date(start.getTime() + 60 * 60 * 1000);
 
-                      const res = await fetch('https://graph.microsoft.com/v1.0/me/events', {
+                      const attendees: Array<{
+                        emailAddress: { address: string; name?: string };
+                        type: 'required' | 'optional';
+                      }> = [];
+                      if (contactoEmail) {
+                        attendees.push({
+                          emailAddress: { address: contactoEmail, name: contactoNombre || undefined },
+                          type: 'required',
+                        });
+                      }
+
+                      await callGraph('/me/events', {
                         method: 'POST',
-                        headers: {
-                          'Authorization': `Bearer ${currentToken}`,
-                          'Content-Type': 'application/json'
-                        },
-                        body: JSON.stringify({
-                          subject: activityForm.tipo || 'Actividad programada',
+                        body: {
+                          subject: activityForm.nota || `Actividad ${activityForm.tipo}`,
                           body: {
                             contentType: 'HTML',
-                            content: activityForm.nota || 'Programada desde el CRM'
+                            content:
+                              `<p><strong>Lead:</strong> ${lead.id}</p>` +
+                              `<p><strong>Organización:</strong> ${orgNombre || '—'}</p>` +
+                              (activityForm.nota
+                                ? `<hr/><p>${activityForm.nota}</p>`
+                                : ''),
                           },
-                          start: {
-                            dateTime: start.toISOString(),
-                            timeZone: 'UTC'
-                          },
-                          end: {
-                            dateTime: end.toISOString(),
-                            timeZone: 'UTC'
-                          }
-                        })
+                          start: { dateTime: start.toISOString(), timeZone: 'America/Lima' },
+                          end:   { dateTime: end.toISOString(),   timeZone: 'America/Lima' },
+                          attendees,
+                        },
                       });
-                      
-                      if (!res.ok) {
-                        if (res.status === 401) {
-                          throw new Error('Esta función requiere Microsoft 365. Contacta a tu administrador.');
-                        }
-                        const errorMsg = await res.text();
-                        throw new Error(`Graph API respondió ${res.status}: ${errorMsg}`);
-                      }
-                      
                       setTabEventAdded(true);
-                      showToast('Evento agregado a tu calendario de Outlook', 'success');
-                    } catch (error: any) {
-                      showToast(error.message || error, 'error');
+                      showToast(
+                        attendees.length
+                          ? `Evento agregado · invitación enviada a ${contactoNombre || contactoEmail}`
+                          : 'Evento agregado a tu calendario de Outlook',
+                        'success',
+                      );
+                    } catch (e) {
+                      handleGraphError(e, 'No se pudo agregar a Outlook');
                     } finally {
                       setAddingTabEvent(false);
                     }
                   }}
                   disabled={addingTabEvent || tabEventAdded}
                   className={cn(
-                    "w-full text-xs font-bold rounded-xl px-3 py-2.5 transition-all flex items-center justify-center gap-2",
+                    'w-full text-xs font-bold rounded-xl px-3 py-2.5 transition-all flex items-center justify-center gap-2',
                     tabEventAdded
-                      ? "bg-green-600 text-white border-green-600 cursor-not-allowed shadow-md"
-                      : "text-primary border border-primary hover:bg-primary/10"
+                      ? 'bg-green-600 text-white border-green-600 cursor-not-allowed shadow-md'
+                      : 'text-primary border border-primary hover:bg-primary/10',
                   )}
                 >
-                  {addingTabEvent ? 'Agregando...' : tabEventAdded ? '✓ Agregado a Outlook' : '+ Outlook Calendar'}
+                  {addingTabEvent
+                    ? 'Agregando...'
+                    : tabEventAdded
+                      ? '✓ Agregado a Outlook'
+                      : '+ Outlook Calendar'}
                 </button>
               </div>
             </div>
@@ -660,7 +706,7 @@ export default function LeadPanel({
               />
             </div>
 
-            {activityForm.tipo === 'reunion' && !msToken && (
+            {activityForm.tipo === 'reunion' && !isConnected && (
               <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 flex flex-col gap-2">
                 <p className="text-xs text-blue-800 font-medium">
                   Conecta tu cuenta Microsoft para generar reuniones de Teams automáticamente.
@@ -676,12 +722,12 @@ export default function LeadPanel({
               disabled={savingActivity || !activityForm.nota.trim()}
               className={cn(
                 "w-full disabled:opacity-40",
-                activityForm.tipo === 'reunion' && msToken ? "bg-[#5059C9] hover:bg-[#4048A8] text-white py-3 rounded-xl font-semibold shadow-sm transition-all" : "btn-primary"
+                activityForm.tipo === 'reunion' && isConnected ? "bg-[#5059C9] hover:bg-[#4048A8] text-white py-3 rounded-xl font-semibold shadow-sm transition-all" : "btn-primary"
               )}
             >
               {savingActivity
                 ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Guardando...</>
-                : activityForm.tipo === 'reunion' && msToken 
+                : activityForm.tipo === 'reunion' && isConnected 
                   ? <span className="flex items-center justify-center gap-2"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 6C14 7.65685 12.6569 9 11 9C9.34315 9 8 7.65685 8 6C8 4.34315 9.34315 3 11 3C12.6569 3 14 4.34315 14 6Z" fill="#FFF"/><path d="M20 7C20 8.10457 19.1046 9 18 9C16.8954 9 16 8.10457 16 7C16 5.89543 16.8954 5 18 5C19.1046 5 20 5.89543 20 7Z" fill="#EAEBFA"/><path d="M14 14.5C14 16.9853 11.9853 19 9.5 19C7.01472 19 5 16.9853 5 14.5C5 12.567 6.25329 10.9262 8 10.25V10H11C12.6569 10 14 11.3431 14 13V14.5Z" fill="#FFF"/><path d="M19.5 18C18.6716 18 18 17.3284 18 16.5V13.5C18 12.6716 17.3284 12 16.5 12H13.75C14.5267 12.6738 15 13.5284 15 14.5V16C15 17.1046 15.8954 18 17 18H19.5Z" fill="#EAEBFA"/></svg> Crear reunión de Teams</span>
                   : <><Plus className="w-4 h-4 inline mr-2" /> Registrar actividad</>
               }

@@ -1,30 +1,42 @@
 /**
- * Modelo de datos Bioactiva CRM — Fase 1
- * Tipos centralizados para todo el sistema
+ * Modelo de datos Bioactiva CRM — alineado al Excel real.
+ *
+ * Los enums viven en `src/lib/constants.ts` y este archivo los re-usa.
+ * Cuando Prisma esté generado, también podremos importar los enums desde
+ * `@prisma/client`; por ahora los tipos del frontend son la fuente.
  */
+
+import type {
+  EstadoLead,
+  EstadoCotizacion,
+  EstadoActividad,
+  TipoActividad,
+  Moneda,
+} from '@/src/lib/constants';
 
 // Organización
 export interface Organization {
-  id: string;                  // ID interno auto: "ORG-2025-001"
-  ruc?: string;                // Opcional — no toda org tiene RUC
-  nombre: string;              // Nombre corto
+  id: string;                  // ID interno: "ORG-2025-001"
+  ruc?: string;
+  nombre: string;
   nombreCompleto?: string;
-  area?: string;               // Departamento/área dentro de la org
-  tipo?: string;               // Empresa, universidad, startup, etc.
-  tamano?: string;
-  sector?: string;
-  ubicacion?: string;
+  area?: string;
+  tipo?: string;               // catálogo abierto (TipoOrg + libre)
+  tamano?: string;             // Grande / Mediana / Pequeña
+  sector?: string;             // catálogo abierto (Sector + libre)
+  ubicacion?: string;          // departamento del Perú
   linkedin?: string;
-  alianzas?: string;
-  actividades?: string;
-  contactoVigente?: string;    // ID del contacto principal
+  alianzas?: string[];         // multi-valor (en el Excel viene coma-separado)
+  actividades?: string;        // texto SUNAT
+  contactoVigente?: boolean;   // del Excel "Contacto vigente": activo / buscar
+  contactoVigenteId?: string;  // ID del contacto principal
   creadoEn: Date;
 }
 
 // Contacto
 export interface Contact {
-  id: string;                  // Código individual: "CON-2025-001"
-  organizacionId: string;      // FK a Organization.id
+  id: string;                  // "CON-2025-001" (o "ID00001" del Excel)
+  organizacionId: string;
   vocativo?: string;
   nombres: string;
   apellidos: string;
@@ -39,8 +51,8 @@ export interface Contact {
 // Actividad dentro de un lead
 export interface Activity {
   id: string;
-  tipo: 'reunion' | 'llamada' | 'email' | 'otro';
-  estado: 'pendiente' | 'realizada';
+  tipo: TipoActividad;
+  estado: EstadoActividad;
   nota: string;
   responsable: string;
   fecha: Date;
@@ -52,37 +64,41 @@ export interface Activity {
 // Lead
 export interface Lead {
   id: string;                  // "LEAD-2025-001"
-  contactoId: string;          // FK a Contact.id
-  organizacionId: string;      // FK a Organization.id
+  /** Un lead puede crearse desde cero (sin contacto) y vincularse después. */
+  contactoId?: string;
+  organizacionId: string;
+  anio?: number;
   servicioInteres?: string;
-  comentarios?: string;        // Notas internas iniciales del lead
+  comentarios?: string;
   canal?: string;
   encargado?: string;
-  encargadoEmail?: string;     // Para alertas y notificaciones
-  estado: 'en_prospecto' | 'ofertado' | 'cierre_con_venta' | 'cierre_sin_venta';
+  encargadoEmail?: string;
+  estado: EstadoLead;
   desafioOportunidad?: string;
   proximaActividad?: string;
   fechaProximaActividad?: Date;
+  alertaManual?: boolean;
   fechaCierre?: Date;
-  historial?: string;          // Resumen de contexto general
-  actividades: Activity[];     // Registro cronológico
+  historial?: string;          // resumen estructurado (post-migración)
+  historialTexto?: string;     // texto crudo del Excel ("Mar-24: ...")
+  actividades: Activity[];
   creadoEn: Date;
 }
 
 // Cotización
 export interface Quote {
   id: string;                  // "COT-2025-001"
-  leadId: string;              // FK a Lead.id
+  leadId: string;
   anio: number;
-  mes: string;
+  mes: string;                 // "Enero", "Setiembre"…
   dirigidoA: string;
   fechaCotizacion: Date;
   cliente: string;
   producto?: string;
   servicio: string;
   monto: number;
-  moneda: 'PEN' | 'USD';
-  estado: 'enviada' | 'aceptada' | 'rechazada' | 'pendiente';
+  moneda: Moneda;
+  estado: EstadoCotizacion;
   remitente: string;
   observacion?: string;
   linkPropuesta?: string;
@@ -92,16 +108,31 @@ export interface Quote {
 // Notificación
 export interface Notification {
   id: string;
-  tipo: 'actividad_vencida' | 'lead_asignado' | 'cotizacion_aceptada' | 
-        'cotizacion_rechazada' | 'lead_cerrado' | 'alerta_admin' | 'general';
+  tipo:
+    | 'actividad_vencida'
+    | 'lead_asignado'
+    | 'cotizacion_aceptada'
+    | 'cotizacion_rechazada'
+    | 'lead_cerrado'
+    | 'alerta_admin'
+    | 'general';
   titulo: string;
   mensaje: string;
   fecha: Date;
   leida: boolean;
   destinatario: {
     tipo: 'usuario' | 'rol' | 'global';
-    userId?: string;        // email del usuario específico
+    userId?: string; // email del usuario específico
     rol?: 'Administrador' | 'Trabajador';
   };
-  linkUrl?: string;         // link a donde redirige al hacer click
+  linkUrl?: string; // link a donde redirige al hacer click
 }
+
+// Re-export de enums para conveniencia del consumidor.
+export type {
+  EstadoLead,
+  EstadoCotizacion,
+  EstadoActividad,
+  TipoActividad,
+  Moneda,
+};
