@@ -3,9 +3,9 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Plus, Edit3, Trash2, ShieldAlert, KeyRound,
+  Plus, Edit3, Trash2, ShieldAlert, KeyRound, Mail,
 } from 'lucide-react';
-import { getInitials } from '@/src/lib/utils';
+import { getInitials, cn } from '@/src/lib/utils';
 import { useAuthStore } from '@/src/store/authStore';
 import { useToast } from '@/src/components/ui/Toast';
 import {
