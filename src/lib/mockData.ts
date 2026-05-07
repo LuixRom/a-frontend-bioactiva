@@ -56,6 +56,24 @@ export const mockOrganizations: Organization[] = [
     actividades: 'Desarrollo de soluciones digitales para el agro peruano',
     creadoEn: new Date('2025-02-20'),
   },
+  {
+    id: 'ORG-2025-005',
+    nombre: 'Inversiones Pisco S.A.',
+    tipo: 'Empresa',
+    sector: 'Alimentos y Bebidas',
+    tamano: 'Mediana',
+    ubicacion: 'Ica, Perú',
+    creadoEn: new Date('2025-04-01'),
+  },
+  {
+    id: 'ORG-2025-006',
+    nombre: 'Constructora del Sur',
+    tipo: 'Empresa',
+    sector: 'Construcción',
+    tamano: 'Grande',
+    ubicacion: 'Arequipa, Perú',
+    creadoEn: new Date('2025-03-10'),
+  },
 ];
 
 // ──────────────────────────────────────────────
@@ -241,6 +259,41 @@ export const mockLeads: Lead[] = [
     actividades: [],
     creadoEn: new Date('2025-04-01'),
   },
+  {
+    id: 'LEAD-2025-005',
+    organizacionId: 'ORG-2025-005',
+    contactoId: 'CON-2025-007',
+    servicioInteres: 'Ley 30309 - Deducción I+D+i',
+    canal: 'Referido',
+    encargado: 'Luis Torres',
+    estado: 'en_proceso',
+    proximaActividad: 'Revisión de sustento técnico',
+    fechaProximaActividad: new Date('2025-05-20'),
+    actividades: [
+      {
+        id: 'ACT-006',
+        tipo: 'reunion',
+        estado: 'realizada',
+        nota: 'Visita a planta para identificar proyectos de mejora tecnológica.',
+        responsable: 'Luis Torres',
+        fecha: new Date('2025-04-10'),
+      }
+    ],
+    creadoEn: new Date('2025-04-05'),
+  },
+  {
+    id: 'LEAD-2025-006',
+    organizacionId: 'ORG-2025-006',
+    contactoId: 'CON-2025-008',
+    servicioInteres: 'Formulación de proyecto ProInnóvate',
+    canal: 'Web',
+    encargado: 'Ana Rojas',
+    estado: 'cerrado_perdido',
+    desafioOportunidad: 'Proyecto de digitalización de procesos.',
+    historial: 'Cliente decidió postergar la inversión por temas presupuestales internos.',
+    actividades: [],
+    creadoEn: new Date('2025-03-20'),
+  }
 ];
 
 // ──────────────────────────────────────────────
