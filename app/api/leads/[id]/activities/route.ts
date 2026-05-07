@@ -17,7 +17,7 @@ export async function POST(
       estado:      body.estado,
       nota:        body.nota,
       responsable: body.responsable,
-      fecha:       body.fechaInicio,
+      fecha:       body.fecha,
     });
     // El campo linkReunion del body de main viene del flujo Teams; si llega
     // lo adjuntamos al cuerpo de respuesta como extra (no se persiste todavía

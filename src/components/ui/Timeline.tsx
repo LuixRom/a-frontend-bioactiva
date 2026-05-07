@@ -48,7 +48,7 @@ export default function Timeline({ items }: TimelineProps) {
               estado: item.estado,
               nota: item.nota,
               responsable: item.responsable,
-              fechaInicio: item.fecha,
+              fecha: item.fecha,
             })
           : null;
         const statusMeta: Record<DerivedActivityStatus, string> = {

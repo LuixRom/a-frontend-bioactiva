@@ -222,7 +222,7 @@ export default function LeadPanel({
      */
     if (activityForm.tipo === 'reunion' && isConnected) {
       try {
-        const start = new Date(activityForm.fechaInicio);
+        const start = new Date(activityForm.fecha);
         let end = activityForm.fechaFin
           ? new Date(activityForm.fechaFin)
           : new Date(start);
@@ -631,7 +631,7 @@ export default function LeadPanel({
                     if (tabEventAdded || addingTabEvent) return;
                     setAddingTabEvent(true);
                     try {
-                      const start = new Date(activityForm.fechaInicio);
+                      const start = new Date(activityForm.fecha);
                       const end = activityForm.fechaFin
                         ? new Date(activityForm.fechaFin)
                         : new Date(start.getTime() + 60 * 60 * 1000);

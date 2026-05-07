@@ -72,7 +72,7 @@ export function toActivity(row: DbActivity): Activity {
     estado:          (row.estado === 'realizada' ? 'realizada' : 'pendiente') as DbEstadoAct & ('pendiente' | 'realizada'),
     nota:            row.nota,
     responsable:     row.responsable ?? '',
-    fechaInicio:     row.fecha,
+    fecha:           row.fecha,
     fechaCompletada: toUndef(row.fechaCompletada),
   };
 }

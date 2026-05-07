@@ -7,7 +7,7 @@ export function getActivityStatus(activity: Activity): DerivedActivityStatus {
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-  const activityDate = new Date(activity.fechaInicio);
+  const activityDate = new Date(activity.fecha);
   activityDate.setHours(0, 0, 0, 0);
 
   if (activityDate.getTime() < today.getTime()) return 'vencida';
@@ -17,7 +17,7 @@ export function getActivityStatus(activity: Activity): DerivedActivityStatus {
 export function getNextPendingActivity(activities: Activity[]): Activity | null {
   const pending = activities
     .filter(activity => getActivityStatus(activity) !== 'realizada')
-    .sort((a, b) => new Date(a.fechaInicio).getTime() - new Date(b.fechaInicio).getTime());
+    .sort((a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime());
 
   return pending[0] ?? null;
 }
@@ -28,6 +28,6 @@ export function syncLeadNextActivity(lead: Lead): Lead {
   return {
     ...lead,
     proximaActividad: nextActivity?.nota ?? undefined,
-    fechaProximaActividad: nextActivity ? new Date(nextActivity.fechaInicio) : undefined,
+    fechaProximaActividad: nextActivity ? new Date(nextActivity.fecha) : undefined,
   };
 }
