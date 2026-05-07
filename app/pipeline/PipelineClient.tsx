@@ -411,6 +411,7 @@ export default function PipelineClient({
               Organización <span className="text-red-500">*</span>
             </label>
             <OrgTypeahead
+              label=""
               options={organizations}
               value={leadForm.organizacionId}
               onChange={(id) =>

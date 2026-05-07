@@ -381,7 +381,6 @@ export default function LeadPanel({
           {/* Header info */}
           <div className="bg-app-bg/40 rounded-2xl p-4 border border-border-subtle space-y-1">
             <p className="text-[10px] font-mono text-text-muted">{lead.id}</p>
-            <p className="font-bold text-text">{orgNombre}</p>
             <p className="text-xs text-text-muted">{contactoNombre}</p>
           </div>
 

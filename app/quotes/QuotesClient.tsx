@@ -38,7 +38,7 @@ const MESES = [
 type QuoteFormState = {
   leadId: string;
   ruc: string;
-  dirigidoA: string;
+  contacto: string; // Renombrado de dirigidoA
   cliente: string;
   producto: string;
   servicio: string;
@@ -54,7 +54,7 @@ type QuoteFormState = {
 const buildInitialQuoteForm = (defaults: { remitente?: string } = {}): QuoteFormState => ({
   leadId:        '',
   ruc:           '',
-  dirigidoA:     '',
+  contacto:      '',
   cliente:       '',
   producto:      '',
   servicio:      '',
@@ -129,8 +129,8 @@ export default function QuotesClient({
       ),
     },
     {
-      key: 'dirigidoA',
-      header: 'Dirigido a',
+      key: 'contacto',
+      header: 'Contacto',
       render: (item: Quote) => (
         <div className="flex flex-col">
           <span className="font-bold text-text truncate max-w-40">{item.dirigidoA}</span>
@@ -238,7 +238,7 @@ export default function QuotesClient({
 
   const handleCreate = () => {
     if (!form.leadId.trim()) {
-      showToast('Selecciona un lead para asociar la cotización', 'error');
+      showToast('Seleccionar un lead para asociar la cotización', 'error');
       return;
     }
     const fecha = new Date(form.fechaCotizacion);
@@ -249,7 +249,7 @@ export default function QuotesClient({
           leadCodigo:      form.leadId.trim(),
           anio:            fecha.getFullYear(),
           mes:             MESES[fecha.getMonth()],
-          dirigidoA:       form.dirigidoA.trim(),
+          dirigidoA:       form.contacto.trim(), // Se mapea contacto -> dirigidoA
           fechaCotizacion: fecha,
           cliente:         form.cliente.trim(),
           producto:        form.producto.trim() || null,
@@ -277,7 +277,10 @@ export default function QuotesClient({
 
   const handleLeadSelect = (leadId: string) => {
     const lead = leads.find((l) => l.id === leadId);
-    if (!lead) { setForm({ ...form, leadId: '' }); return; }
+    if (!lead) { 
+      setForm({ ...form, leadId: '', cliente: '', contacto: '', servicio: '' }); 
+      return; 
+    }
     const org     = organizations.find((o) => o.id === lead.organizacionId);
     const contact = contacts.find((c) => c.id === lead.contactoId);
     const nombre  = contact ? `${contact.vocativo ? contact.vocativo + ' ' : ''}${contact.nombres} ${contact.apellidos}` : '';
@@ -286,13 +289,19 @@ export default function QuotesClient({
       leadId,
       ruc:       org?.ruc ?? '',
       cliente:   org?.nombreCompleto ?? org?.nombre ?? '',
-      dirigidoA: nombre,
+      contacto:  nombre,
       servicio:  lead.servicioInteres ?? '',
     });
   };
 
 
-  const canSave = form.dirigidoA.trim() && form.cliente.trim() && form.servicio.trim() && form.remitente.trim();
+  const canSave = Boolean(
+    form.leadId && 
+    form.cliente.trim() && 
+    form.servicio.trim() && 
+    form.moneda && 
+    form.remitente.trim()
+  );
 
   return (
     <div className="space-y-8">
@@ -353,13 +362,13 @@ export default function QuotesClient({
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Dirigido a <span className="text-red-500">*</span></label>
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Contacto</label>
               <input
                 type="text"
-                value={form.dirigidoA}
-                onChange={(e) => setForm({ ...form, dirigidoA: e.target.value })}
+                value={form.contacto}
+                onChange={(e) => setForm({ ...form, contacto: e.target.value })}
                 className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
-                placeholder="Nombre completo del destinatario"
+                placeholder="Nombre del contacto (opcional)"
               />
             </div>
             <div className="space-y-1.5">
@@ -420,7 +429,7 @@ export default function QuotesClient({
               />
             </div>
             <div className="space-y-1.5">
-              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Moneda</label>
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Moneda <span className="text-red-500">*</span></label>
               <select
                 value={form.moneda}
                 onChange={(e) => setForm({ ...form, moneda: e.target.value as 'PEN' | 'USD' })}
