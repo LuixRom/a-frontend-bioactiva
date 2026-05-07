@@ -8,11 +8,10 @@ import {
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
-import { getInitials } from '@/src/lib/utils';
+import { getInitials, cn, relativeTime } from '@/src/lib/utils';
 import { useGlobalSearch } from '@/src/hooks/useGlobalSearch';
 import { mockLeads, mockOrganizations } from '@/src/lib/mockData';
 import { getAlertLevel } from '@/src/lib/alertLevel';
-import { cn } from '@/src/lib/utils';
 import { useNotificationStore } from '@/src/store/notificationStore';
 import MicrosoftStatusBadge from '@/src/components/MicrosoftStatusBadge';
 import { findUserByEmail } from '@/src/server/actions/users';
