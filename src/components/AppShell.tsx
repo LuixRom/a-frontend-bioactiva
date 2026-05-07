@@ -2,6 +2,7 @@
 
 import type React from 'react';
 import { useEffect, useState } from 'react';
+import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
 import Sidebar from '@/src/components/Sidebar';
 import LoginPage from '@/src/components/LoginPage';
@@ -49,10 +50,24 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     handleRedirect();
   }, [setMsToken, setMsAccountUsername, showToast, userEmail]);
 
+  const pathname = usePathname();
+  const isActivationPage = pathname?.startsWith('/activate');
+
   if (!mounted) {
-    // Render a blank screen that matches what the server sends.
-    // This avoids any tree-shape mismatch during hydration.
     return null;
+  }
+
+  // Allow public access to activation pages
+  if (isActivationPage) {
+    return (
+      <div className="min-h-screen bg-app-bg font-sans">
+        <main className="flex-1 p-6 animate-fade-in">
+          <div className="max-w-[1600px] mx-auto">
+            {children}
+          </div>
+        </main>
+      </div>
+    );
   }
 
   if (!isAuthenticated) {

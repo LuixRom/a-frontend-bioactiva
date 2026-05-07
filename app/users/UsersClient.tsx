@@ -16,8 +16,12 @@ import {
   type PublicUser,
 } from '@/src/server/actions/users';
 
+import { listInvitations, inviteUser, type UserInvitationPublic } from '@/src/server/actions/invitations';
+import InvitationsList from './InvitationsList';
+
 interface UsersClientProps {
   initialUsers: PublicUser[];
+  initialInvitations: UserInvitationPublic[];
 }
 
 type Mode = 'create' | 'edit-info' | 'change-password' | null;
@@ -45,13 +49,16 @@ function formatLastLogin(d: Date | null): string {
   return last.toLocaleDateString('es-PE');
 }
 
-export default function UsersClient({ initialUsers }: UsersClientProps) {
+export default function UsersClient({ initialUsers, initialInvitations }: UsersClientProps) {
   const router = useRouter();
   const { role } = useAuthStore();
   const { showToast } = useToast();
-  const [, startTransition] = useTransition();
+  const [isPending, startTransition] = useTransition();
 
   const [users, setUsers] = useState<PublicUser[]>(initialUsers);
+  const [invitations, setInvitations] = useState<UserInvitationPublic[]>(initialInvitations);
+  const [activeTab, setActiveTab] = useState<'usuarios' | 'invitaciones'>('usuarios');
+  
   const [mode, setMode] = useState<Mode>(null);
   const [editing, setEditing] = useState<PublicUser | null>(null);
 
@@ -98,32 +105,46 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
 
   const handleSubmit = () => {
     if (mode === 'create') {
-      if (!formData.name.trim() || !formData.email.trim() || !formData.password) {
-        showToast('Completa todos los campos obligatorios', 'error');
+      const email = formData.email.trim().toLowerCase();
+      
+      // 1. Campos completos
+      if (!email || !formData.role) {
+        showToast('Campos obligatorios para el envío del correo', 'error');
         return;
       }
-      if (formData.password !== formData.confirmPassword) {
-        showToast('Las contraseñas no coinciden', 'error');
+
+      // 2. Dominio institucional
+      if (!email.endsWith('@bioactiva.pe')) {
+        showToast('El correo no pertenece al dominio institucional (@bioactiva.pe)', 'error');
         return;
       }
+
+      // 3. Ya registrado
+      const alreadyUser = users.find(u => u.email.toLowerCase() === email);
+      const alreadyInvited = invitations.find(i => i.email.toLowerCase() === email && i.status === 'Enviada');
+      
+      if (alreadyUser) {
+        showToast('El correo ya está registrado como usuario activo', 'error');
+        return;
+      }
+      if (alreadyInvited) {
+        showToast('Ya existe una invitación pendiente para este correo', 'error');
+        return;
+      }
+
       startTransition(async () => {
         try {
-          const created = await createUser({
-            email:    formData.email,
-            name:     formData.name,
-            password: formData.password,
-            role:     formData.role,
-            active:   true,
-          });
-          setUsers((prev) => [...prev, created]);
-          showToast('Usuario creado correctamente', 'success');
+          await inviteUser(email, formData.role);
+          showToast('Invitación enviada correctamente', 'success');
+          
+          // Recargar invitaciones
+          const updatedInvs = await listInvitations();
+          setInvitations(updatedInvs);
+          
           handleClose();
           router.refresh();
         } catch (err) {
-          showToast(
-            err instanceof Error ? err.message : 'Error al crear usuario',
-            'error',
-          );
+          showToast(err instanceof Error ? err.message : 'Error al enviar invitación', 'error');
         }
       });
       return;
@@ -242,7 +263,33 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-semibold text-white transition-all hover:scale-105"
           style={{ background: 'linear-gradient(135deg, #1C7E3C, #24a34e)' }}
         >
-          <Plus className="w-4 h-4" /> Nuevo Usuario
+          <Plus className="w-4 h-4" /> Invitar Usuario
+        </button>
+      </div>
+
+      {/* Tabs */}
+      <div className="flex gap-2 border-b p-1" style={{ borderColor: '#edfce8' }}>
+        <button
+          onClick={() => setActiveTab('usuarios')}
+          className={cn(
+            "px-6 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2",
+            activeTab === 'usuarios' 
+              ? "border-primary text-primary" 
+              : "border-transparent text-text-muted hover:text-text"
+          )}
+        >
+          Usuarios Activos
+        </button>
+        <button
+          onClick={() => setActiveTab('invitaciones')}
+          className={cn(
+            "px-6 py-2.5 text-xs font-black uppercase tracking-widest transition-all border-b-2",
+            activeTab === 'invitaciones' 
+              ? "border-primary text-primary" 
+              : "border-transparent text-text-muted hover:text-text"
+          )}
+        >
+          Invitaciones Enviadas
         </button>
       </div>
 
@@ -254,12 +301,21 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
           color: '#1C7E3C',
         }}
       >
-        <strong>Gestión de Roles:</strong> los administradores pueden crear,
-        editar y desactivar usuarios. Las contraseñas se guardan hasheadas con
-        bcrypt — nunca se exponen al cliente.
+        {activeTab === 'usuarios' ? (
+          <>
+            <strong>Gestión de Roles:</strong> los administradores pueden crear,
+            editar y desactivar usuarios. Las contraseñas se guardan hasheadas con
+            bcrypt — nunca se exponen al cliente.
+          </>
+        ) : (
+          <>
+            <strong>Control de Invitaciones:</strong> Se listan los correos a los que se ha enviado invitación. 
+            Los usuarios deben activar su cuenta mediante el enlace enviado para aparecer en la lista de usuarios activos.
+          </>
+        )}
       </div>
 
-      <div
+      {activeTab === 'usuarios' ? (
         className="rounded-2xl overflow-hidden"
         style={{
           background: '#fff',
@@ -357,6 +413,9 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
           </tbody>
         </table>
       </div>
+      ) : (
+        <InvitationsList invitations={invitations} />
+      )}
 
       {mode && (
         <div
@@ -372,7 +431,7 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
               style={{ borderColor: '#edfce8' }}
             >
               <h2 className="font-bold" style={{ color: '#0f2d1a' }}>
-                {mode === 'create' && 'Nuevo Usuario'}
+                {mode === 'create' && 'Invitar Nuevo Usuario'}
                 {mode === 'edit-info' && `Editar datos · ${editing?.name}`}
                 {mode === 'change-password' && `Cambiar contraseña · ${editing?.name}`}
               </h2>
@@ -387,28 +446,42 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
               {/* Datos del usuario (en create y edit-info) */}
               {mode !== 'change-password' && (
                 <>
-                  <div>
-                    <label
-                      className="text-xs font-semibold uppercase tracking-wide block mb-1.5"
-                      style={{ color: '#4a7c5e' }}
-                    >
-                      Nombre completo *
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(e) =>
-                        setFormData({ ...formData, name: e.target.value })
-                      }
-                      className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
-                      style={{
-                        border: '1.5px solid #c8edcf',
-                        background: '#f8fdf6',
-                        color: '#0f2d1a',
-                      }}
-                      placeholder="Nombre y apellido"
-                    />
-                  </div>
+                  {mode === 'create' && (
+                    <div className="p-4 bg-green-50 rounded-2xl border border-green-100 flex items-start gap-3 mb-4">
+                      <Mail className="w-5 h-5 text-green-600 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-sm font-bold text-green-800">Flujo de Invitación</p>
+                        <p className="text-xs text-green-700/70 leading-relaxed">
+                          Se enviará un correo de activación. El usuario definirá sus credenciales al activar su cuenta.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {mode !== 'create' && (
+                    <div>
+                      <label
+                        className="text-xs font-semibold uppercase tracking-wide block mb-1.5"
+                        style={{ color: '#4a7c5e' }}
+                      >
+                        Nombre completo *
+                      </label>
+                      <input
+                        type="text"
+                        value={formData.name}
+                        onChange={(e) =>
+                          setFormData({ ...formData, name: e.target.value })
+                        }
+                        className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                        style={{
+                          border: '1.5px solid #c8edcf',
+                          background: '#f8fdf6',
+                          color: '#0f2d1a',
+                        }}
+                        placeholder="Nombre y apellido"
+                      />
+                    </div>
+                  )}
                   <div>
                     <label
                       className="text-xs font-semibold uppercase tracking-wide block mb-1.5"
@@ -422,14 +495,18 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                       onChange={(e) =>
                         setFormData({ ...formData, email: e.target.value })
                       }
-                      className="w-full px-4 py-2.5 rounded-xl text-sm outline-none"
+                      className="w-full px-4 py-2.5 rounded-xl text-sm outline-none disabled:opacity-50"
                       style={{
                         border: '1.5px solid #c8edcf',
                         background: '#f8fdf6',
                         color: '#0f2d1a',
                       }}
                       placeholder="correo@bioactiva.pe"
+                      disabled={mode === 'edit-info'}
                     />
+                    {mode === 'create' && !formData.email.endsWith('@bioactiva.pe') && formData.email.includes('@') && (
+                      <p className="text-[10px] text-red-500 font-bold mt-1">El correo debe pertenecer al dominio @bioactiva.pe</p>
+                    )}
                   </div>
                   <div>
                     <label
@@ -521,11 +598,11 @@ export default function UsersClient({ initialUsers }: UsersClientProps) {
                 </button>
                 <button
                   onClick={handleSubmit}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white"
+                  className="flex-1 py-2.5 rounded-xl text-sm font-semibold text-white disabled:opacity-50"
                   style={{ background: '#1C7E3C' }}
+                  disabled={isPending || (mode === 'create' && (!formData.email.trim() || !formData.email.endsWith('@bioactiva.pe')))}
                 >
-                  {mode === 'create' && 'Crear usuario'}
-                  {mode === 'edit-info' && 'Guardar cambios'}
+                  {mode === 'create' ? (isPending ? 'Enviando...' : 'Enviar invitación') : 'Guardar cambios'}
                   {mode === 'change-password' && 'Actualizar contraseña'}
                 </button>
               </div>
