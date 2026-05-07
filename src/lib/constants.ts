@@ -166,6 +166,17 @@ export type MesEs = (typeof MESES_ES)[number];
 export type TipoActividad = 'reunion' | 'llamada' | 'email' | 'otro';
 export type EstadoActividad = 'pendiente' | 'realizada';
 
+// ─── Roles de Usuario (para Auth/Invitaciones) ────────────────────
+export type UserRole = 'Administrador' | 'Trabajador';
+
+// ─── Tipos de Notificación ────────────────────────────────────────
+export type NotificationType = 
+  | 'ACTIVIDAD_VENCIDA' 
+  | 'ACTIVIDAD_PROXIMA' 
+  | 'LEAD_ASIGNADO' 
+  | 'COTIZACION_ACEPTADA' 
+  | 'COTIZACION_RECHAZADA';
+
 export const TIPOS_ACTIVIDAD: ReadonlyArray<{ id: TipoActividad; label: string }> = [
   { id: 'reunion', label: 'Reunión' },
   { id: 'llamada', label: 'Llamada' },
