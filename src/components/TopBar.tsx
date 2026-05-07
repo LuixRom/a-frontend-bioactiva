@@ -48,7 +48,7 @@ export default function TopBar() {
 
     const fetchNotis = async () => {
       try {
-        const user = await fetch('/api/search-document?document=0').then(() => findUserByEmail(userEmail)); // use findUserByEmail
+        const user = await findUserByEmail(userEmail);
         if (user) {
           const count = await getUnreadCount(user.id);
           setUnreadCount(count);

@@ -23,25 +23,22 @@ export async function GET(req: NextRequest) {
 
   try {
     const url = `${SUNAT_SERVICE}/consultar-ruc?ruc=${encodeURIComponent(digits)}`;
+    console.log(`[SUNAT Proxy] Fetching: ${url}`);
 
-    const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
+    const response = await fetch(url, { 
+      signal: AbortSignal.timeout(30000),
+      headers: { 'Accept': 'application/json' }
+    });
 
     if (!response.ok) {
+      const errorText = await response.text().catch(() => 'No error detail');
+      console.error(`[SUNAT Proxy] Backend error ${response.status}:`, errorText);
+
       if (response.status === 404) {
-        return NextResponse.json(
-          { error: 'No se encontraron datos para el RUC ingresado' },
-          { status: 404 }
-        );
+        return NextResponse.json({ error: 'RUC no encontrado en SUNAT' }, { status: 404 });
       }
-      if (response.status === 503 || response.status === 504) {
-        return NextResponse.json(
-          { error: 'Servicio SUNAT no está disponible. Intente más tarde' },
-          { status: 503 }
-        );
-      }
-      const error = await response.json().catch(() => ({}));
       return NextResponse.json(
-        { error: (error as any).detail || 'Error consultando SUNAT' },
+        { error: `Error del servicio externo (${response.status})` },
         { status: response.status }
       );
     }
@@ -49,11 +46,13 @@ export async function GET(req: NextRequest) {
     const data = await response.json();
     return NextResponse.json(data);
 
-  } catch (err) {
-    console.error('[SUNAT proxy error]', err);
+  } catch (err: any) {
+    console.error('[SUNAT Proxy] Exception:', err.name, err.message);
+    const isTimeout = err.name === 'TimeoutError' || err.name === 'AbortError';
+    
     return NextResponse.json(
-      { error: 'Error de conexión con el servidor' },
-      { status: 503 }
+      { error: isTimeout ? 'La consulta a SUNAT demoró demasiado (timeout)' : 'Error de comunicación con el servicio SUNAT' },
+      { status: isTimeout ? 504 : 503 }
     );
   }
 }
