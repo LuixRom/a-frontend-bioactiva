@@ -27,31 +27,75 @@ export type UserUpdateInput = {
   active?: boolean;
 };
 
-const MOCK_USER: PublicUser = {
-  id: 'mock-user-123',
-  email: 'admin@bioactiva.pe',
-  name: 'Administrador Bioactiva',
-  role: 'Administrador',
-  active: true,
-  lastLogin: new Date(),
-  createdAt: new Date('2025-01-01'),
-};
+const MOCK_USERS: (PublicUser & { passwordHash: string })[] = [
+  {
+    id: 'mock-admin',
+    email: 'admin@bioactiva.pe',
+    name: 'Administrador Bioactiva',
+    role: 'Administrador',
+    active: true,
+    lastLogin: new Date(),
+    createdAt: new Date('2025-01-01'),
+    passwordHash: 'Bioactiva2025!'
+  },
+  {
+    id: 'mock-worker-1',
+    email: 'trabajador1@bioactiva.pe',
+    name: 'Juan Trabajador',
+    role: 'Trabajador',
+    active: true,
+    lastLogin: new Date(),
+    createdAt: new Date('2025-02-01'),
+    passwordHash: 'Bioactiva2025!'
+  },
+  {
+    id: 'mock-worker-2',
+    email: 'trabajador2@bioactiva.pe',
+    name: 'Maria Vendedora',
+    role: 'Trabajador',
+    active: true,
+    lastLogin: new Date(),
+    createdAt: new Date('2025-02-05'),
+    passwordHash: 'Bioactiva2025!'
+  },
+  {
+    id: 'mock-worker-3',
+    email: 'trabajador3@bioactiva.pe',
+    name: 'Carlos Soporte',
+    role: 'Trabajador',
+    active: true,
+    lastLogin: new Date(),
+    createdAt: new Date('2025-02-10'),
+    passwordHash: 'Bioactiva2025!'
+  }
+];
 
 export async function listUsers(): Promise<PublicUser[]> {
-  return [MOCK_USER];
+  return MOCK_USERS.map(({ passwordHash, ...u }) => u);
 }
 
 export async function findUserByEmail(email: string): Promise<PublicUser | null> {
   console.info('[MOCK] findUserByEmail', email);
-  return MOCK_USER;
+  const user = MOCK_USERS.find(u => u.email === email);
+  if (!user) return null;
+  const { passwordHash, ...publicUser } = user;
+  return publicUser;
 }
 
 export async function createUser(input: UserCreateInput): Promise<PublicUser> {
-  return { ...MOCK_USER, email: input.email, name: input.name, role: input.role };
+  const newUser = {
+    ...MOCK_USERS[0],
+    id: `mock-${Date.now()}`,
+    email: input.email,
+    name: input.name,
+    role: input.role
+  };
+  return newUser;
 }
 
 export async function updateUser(id: string, patch: UserUpdateInput): Promise<PublicUser> {
-  return { ...MOCK_USER, ...patch };
+  const user = MOCK_USERS.find(u => u.id === id) || MOCK_USERS[0];
+  return { ...user, ...patch };
 }
 
 export async function updateUserPassword(id: string, newPassword: string): Promise<{ ok: true }> {
@@ -64,8 +108,10 @@ export async function deleteUser(id: string): Promise<{ ok: true }> {
 
 export async function verifyCredentials(email: string, password: string): Promise<PublicUser | null> {
   console.info('[MOCK] verifyCredentials', email);
-  if (email === 'admin@bioactiva.pe' && password === 'Bioactiva2025!') {
-    return MOCK_USER;
+  const user = MOCK_USERS.find(u => u.email === email && u.passwordHash === password);
+  if (user) {
+    const { passwordHash, ...publicUser } = user;
+    return publicUser;
   }
   return null;
 }
