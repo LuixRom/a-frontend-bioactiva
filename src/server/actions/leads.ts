@@ -39,8 +39,8 @@ export async function listLeads(): Promise<Lead[]> {
   return mockLeads;
 }
 
-export async function getLeadById(id: string): Promise<Lead | null> {
-  console.info('[MOCK] getLeadById', id);
+export async function getLeadByCodigo(id: string): Promise<Lead | null> {
+  console.info('[MOCK] getLeadByCodigo', id);
   return mockLeads.find(l => l.id === id) || null;
 }
 

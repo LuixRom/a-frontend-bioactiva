@@ -26,8 +26,8 @@ export async function listQuotes(): Promise<Quote[]> {
   return mockQuotes;
 }
 
-export async function getQuoteById(id: string): Promise<Quote | null> {
-  console.info('[MOCK] getQuoteById', id);
+export async function getQuoteByCodigo(id: string): Promise<Quote | null> {
+  console.info('[MOCK] getQuoteByCodigo', id);
   return mockQuotes.find(q => q.id === id) || null;
 }
 

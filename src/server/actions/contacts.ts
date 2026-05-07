@@ -20,8 +20,8 @@ export async function listContacts(): Promise<Contact[]> {
   return mockContacts;
 }
 
-export async function getContactById(id: string): Promise<Contact | null> {
-  console.info('[MOCK] getContactById', id);
+export async function getContactByCodigo(id: string): Promise<Contact | null> {
+  console.info('[MOCK] getContactByCodigo', id);
   return mockContacts.find(c => c.id === id) || null;
 }
 

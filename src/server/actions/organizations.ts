@@ -23,8 +23,8 @@ export async function listOrganizations(): Promise<Organization[]> {
   return mockOrganizations;
 }
 
-export async function getOrganizationById(id: string): Promise<Organization | null> {
-  console.info('[MOCK] getOrganizationById', id);
+export async function getOrganizationByCodigo(id: string): Promise<Organization | null> {
+  console.info('[MOCK] getOrganizationByCodigo', id);
   return mockOrganizations.find(o => o.id === id) || null;
 }
 
