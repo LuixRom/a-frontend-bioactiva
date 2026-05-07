@@ -56,6 +56,6 @@ export async function getUnreadCount(userId: string): Promise<number> {
   return MOCK_NOTIFICATIONS.filter(n => !n.read).length;
 }
 
-export async function generateNotifications() {
+export async function generateNotifications(): Promise<{ success: boolean; createdCount: number; error?: string }> {
   return { success: true, createdCount: 0 };
 }
