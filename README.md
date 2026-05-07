@@ -156,6 +156,8 @@ Quote {
 | Excel parsing | SheetJS (xlsx) |
 | Fuzzy matching | string-similarity (Dice coefficient) |
 | Drag & drop | @hello-pangea/dnd |
+| Autenticación | @azure/msal-browser (MSAL) |
+| Integración | Microsoft Graph API (Microsoft Teams) |
 
 ---
 
@@ -174,6 +176,7 @@ a-frontend-bioactiva/
 │   ├── notifications/page.tsx        # Centro de notificaciones
 │   ├── events/page.tsx               # Calendario de actividades
 │   ├── users/page.tsx                # Gestión de usuarios
+│   ├── profile/page.tsx              # Perfil de usuario y vinculación Microsoft Teams
 │   └── api/
 │       ├── search-document/route.ts  # Proxy → SUNAT por RUC
 │       ├── search-nombre/route.ts    # Proxy → SUNAT por razón social
@@ -196,6 +199,7 @@ a-frontend-bioactiva/
 │   │   ├── checkAndNotify.ts         # Lógica de notificaciones
 │   │   ├── buildExportFilename.ts    # Nombres de archivos exportados
 │   │   ├── calendarLink.ts           # Generar links de Google Calendar
+│   │   ├── msalConfig.ts             # Configuración de MSAL para Microsoft Graph
 │   │   └── utils.ts                  # cn() y formatters (currency, date)
 │   └── components/
 │       ├── Sidebar.tsx               # Navegación lateral
@@ -514,6 +518,19 @@ Panel lateral de detalle del lead con:
   - Toggle visual "Por RUC" / "Por Razón Social"
   - Modo razón social: debounce 500ms, dropdown de coincidencias SUNAT, al seleccionar dispara búsqueda por RUC para completar datos completos
   - Reset completo de estado al cerrar el drawer (`useEffect` en `isOpen`)
+
+### 03/05/2026 — Cuarta tanda (Integración Microsoft & Roles)
+
+- **Gestión de Roles (Administrador vs Trabajador)**:
+  - Separación explícita de permisos según el rol del usuario.
+  - Los usuarios con rol `Administrador` tienen acceso completo, incluyendo la gestión de usuarios (`/users`).
+  - Los usuarios con rol `Trabajador` tienen acceso operativo, excluyendo el acceso a la administración de usuarios.
+- **Integración con Microsoft Teams**:
+  - Implementación de `@azure/msal-browser` para autenticación OAuth con cuentas corporativas Microsoft.
+  - Opción de conectar/desconectar cuenta Microsoft desde el perfil del usuario.
+  - Creación automática de reuniones de Teams para las actividades programadas en el LeadPanel.
+- **Mejoras generales**:
+  - Optimización de la experiencia de usuario con carga de perfil y estado persistente en localStorage/sessionStorage.
 
 ---
 

@@ -3,12 +3,13 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from playwright.async_api import async_playwright
 import uvicorn
+import httpx
 
 app = FastAPI()
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],  # Solo el frontend local
+    allow_origins=["*"],  # Solo el frontend local
     allow_credentials=True,
     allow_methods=["GET"],
     allow_headers=["*"],
@@ -92,10 +93,23 @@ async def scrape_by_ruc(ruc: str) -> dict:
 
 @app.get("/consultar-ruc")
 async def consultar_por_ruc(ruc: str):
-    """Busca por RUC directo — resultado único"""
+    """Busca por RUC usando la API de prueba (NixOS)"""
     if len(ruc) != 11 or not ruc.isdigit():
         raise HTTPException(status_code=400, detail="RUC debe tener 11 dígitos numéricos")
-    return await scrape_by_ruc(ruc)
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            test_url = f"https://nixos.tail805b57.ts.net/consultar-ruc?ruc={ruc}"
+            response = await client.get(test_url, timeout=15.0)
+            
+            if response.status_code == 200:
+                return response.json()
+            
+            # Si el servicio de prueba falla, intentamos el scraper como respaldo
+            return await scrape_by_ruc(ruc)
+        except Exception:
+            # Si hay error de conexión con la API de prueba, usamos el scraper
+            return await scrape_by_ruc(ruc)
 
 
 import re as _re
@@ -172,6 +186,26 @@ async def consultar_por_nombre(nombre: str):
     if len(nombre) < 3:
         raise HTTPException(status_code=400, detail="Ingresa al menos 3 caracteres")
     return await scrape_by_nombre(nombre)
+
+
+@app.get("/apiprueba")
+async def apiprueba(ruc: str):
+    """Prueba de API externa para consulta RUC"""
+    if len(ruc) != 11 or not ruc.isdigit():
+        raise HTTPException(status_code=400, detail="RUC debe tener 11 dígitos numéricos")
+    
+    async with httpx.AsyncClient() as client:
+        try:
+            # Intentamos consultar el servicio externo proporcionado por el usuario
+            test_url = f"https://nixos.tail805b57.ts.net/consultar-ruc?ruc={ruc}"
+            response = await client.get(test_url, timeout=10.0)
+            
+            if response.status_code != 200:
+                raise HTTPException(status_code=response.status_code, detail="Error en el servicio de prueba")
+            
+            return response.json()
+        except Exception as e:
+            raise HTTPException(status_code=503, detail=f"No se pudo conectar con la API de prueba: {str(e)}")
 
 
 @app.get("/health")

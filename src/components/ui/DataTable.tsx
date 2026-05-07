@@ -35,11 +35,12 @@ export default function DataTable<T extends { id: string }>({
   pageSize = 10,
   searchPlaceholder = 'Buscar...',
 }: DataTableProps<T>) {
-  const [sortKey, setSortKey]     = useState<string | null>(null);
+  const [sortKey, setSortKey] = useState<string | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [currentPage, setCurrentPage] = useState(1);
-  const [query, setQuery]         = useState('');
+  const [query, setQuery] = useState('');
 
+  //Reset
   // Reset to page 1 whenever data or query changes
   useEffect(() => { setCurrentPage(1); }, [data, query]);
 
@@ -81,9 +82,9 @@ export default function DataTable<T extends { id: string }>({
   }, [filtered, sortKey, sortOrder]);
 
   // ── Pagination ──────────────────────────────────────────────────────────
-  const totalPages  = Math.max(1, Math.ceil(sorted.length / pageSize));
-  const safePage    = Math.min(currentPage, totalPages);
-  const startIndex  = (safePage - 1) * pageSize;
+  const totalPages = Math.max(1, Math.ceil(sorted.length / pageSize));
+  const safePage = Math.min(currentPage, totalPages);
+  const startIndex = (safePage - 1) * pageSize;
   const paginatedData = sorted.slice(startIndex, startIndex + pageSize);
 
   // Max visible page buttons
@@ -147,7 +148,7 @@ export default function DataTable<T extends { id: string }>({
                     className={cn(
                       'px-6 py-4 text-left text-xs font-bold uppercase tracking-wider',
                       col.sortable && 'cursor-pointer hover:bg-primary-dark transition-colors',
-                      col.sticky === 'left'  && 'sticky left-0 bg-primary z-10',
+                      col.sticky === 'left' && 'sticky left-0 bg-primary z-10',
                       col.sticky === 'right' && 'sticky right-0 bg-primary z-10'
                     )}
                   >
@@ -155,8 +156,8 @@ export default function DataTable<T extends { id: string }>({
                       {col.header}
                       {col.sortable && (
                         <div className="flex flex-col">
-                          <ChevronUp   className={cn('w-3 h-3 -mb-1', sortKey === String(col.key) && sortOrder === 'asc'  ? 'opacity-100' : 'opacity-40')} />
-                          <ChevronDown className={cn('w-3 h-3',       sortKey === String(col.key) && sortOrder === 'desc' ? 'opacity-100' : 'opacity-40')} />
+                          <ChevronUp className={cn('w-3 h-3 -mb-1', sortKey === String(col.key) && sortOrder === 'asc' ? 'opacity-100' : 'opacity-40')} />
+                          <ChevronDown className={cn('w-3 h-3', sortKey === String(col.key) && sortOrder === 'desc' ? 'opacity-100' : 'opacity-40')} />
                         </div>
                       )}
                     </div>
@@ -178,7 +179,7 @@ export default function DataTable<T extends { id: string }>({
                       key={String(col.key)}
                       className={cn(
                         'px-6 py-4 text-sm text-text whitespace-nowrap',
-                        col.sticky === 'left'  && cn('sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]',  idx % 2 === 0 ? 'bg-surface' : 'bg-[#f8fdf6]'),
+                        col.sticky === 'left' && cn('sticky left-0 z-10 shadow-[2px_0_5px_rgba(0,0,0,0.05)]', idx % 2 === 0 ? 'bg-surface' : 'bg-[#f8fdf6]'),
                         col.sticky === 'right' && cn('sticky right-0 z-10 shadow-[-2px_0_5px_rgba(0,0,0,0.05)]', idx % 2 === 0 ? 'bg-surface' : 'bg-[#f8fdf6]')
                       )}
                     >
