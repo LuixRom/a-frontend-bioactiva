@@ -15,6 +15,8 @@ import { getAlertLevel } from '@/src/lib/alertLevel';
 import { cn } from '@/src/lib/utils';
 import { useNotificationStore } from '@/src/store/notificationStore';
 import MicrosoftStatusBadge from '@/src/components/MicrosoftStatusBadge';
+import { findUserByEmail } from '@/src/server/actions/users';
+import { listNotifications, getUnreadCount, markNotificationAsRead } from '@/src/server/actions/notifications';
 
 export default function TopBar() {
   const { userName, userEmail, role } = useAuthStore();
@@ -36,24 +38,48 @@ export default function TopBar() {
     results.contacts.length > 0 ||
     results.leads.length > 0;
 
-  // ── Notification bell ────────────────────────────────────────────────────
+  // ── Notification bell (Real data) ───────────────────────────────────────
   const [bellOpen, setBellOpen] = useState(false);
   const bellRef = useRef<HTMLDivElement>(null);
+  const [realNotifications, setRealNotifications] = useState<any[]>([]);
+  const [unreadCount, setUnreadCount] = useState(0);
 
-  const { notifications, markAsRead, markAllAsRead, getMyNotifications } = useNotificationStore();
-  const myNotifications = useMemo(() => getMyNotifications(userEmail, role), [notifications, userEmail, role, getMyNotifications]);
-  const unreadNotifications = useMemo(() => myNotifications.filter(n => !n.leida), [myNotifications]);
-  const readNotifications = useMemo(() => myNotifications.filter(n => n.leida), [myNotifications]);
+  useEffect(() => {
+    if (!userEmail) return;
 
-  const totalAlerts = unreadNotifications.length;
+    const fetchNotis = async () => {
+      try {
+        const user = await fetch('/api/search-document?document=0').then(() => findUserByEmail(userEmail)); // use findUserByEmail
+        if (user) {
+          const count = await getUnreadCount(user.id);
+          setUnreadCount(count);
+          
+          if (bellOpen) {
+            const list = await listNotifications(user.id, 'todos');
+            setRealNotifications(list.slice(0, 5)); // Solo las 5 más recientes en el dropdown
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching TopBar notifications:', err);
+      }
+    };
 
-  const handleDismissOne = (id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    markAsRead(id);
-  };
+    fetchNotis();
+    // Poll cada 2 minutos o al abrir el bell
+    const interval = setInterval(fetchNotis, 120000);
+    return () => clearInterval(interval);
+  }, [userEmail, bellOpen]);
 
-  const handleDismissAll = () => {
-    markAllAsRead();
+  const totalAlerts = unreadCount;
+
+  const handleNotificationClick = async (noti: any) => {
+    if (!noti.read) {
+      await markNotificationAsRead(noti.id);
+      setUnreadCount(prev => Math.max(0, prev - 1));
+    }
+    setBellOpen(false);
+    if (noti.leadId) router.push(`/pipeline?leadId=${noti.leadId}`);
+    else router.push('/notifications');
   };
 
   // ── Click-outside handler for both dropdowns ─────────────────────────────
@@ -206,7 +232,7 @@ export default function TopBar() {
 
               {/* Items */}
               <div className="max-h-72 overflow-y-auto divide-y divide-border-subtle">
-                {myNotifications.length === 0 ? (
+                {realNotifications.length === 0 ? (
                   <div className="flex flex-col items-center justify-center py-10 text-text-muted">
                     <CalendarDays className="w-8 h-8 mb-2 opacity-30" />
                     <p className="text-xs font-medium">No hay notificaciones</p>
@@ -214,70 +240,54 @@ export default function TopBar() {
                 ) : (
                   <>
                     {/* Sección "Sin leer" */}
-                    {unreadNotifications.length > 0 && (
+                    {realNotifications.filter(n => !n.read).length > 0 && (
                       <div>
                         <p className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider bg-app-bg/30 border-b border-border-subtle flex items-center justify-between">
                           <span>Sin leer</span>
                           <span className="w-2 h-2 rounded-full bg-red-500"></span>
                         </p>
-                        {unreadNotifications.map(n => (
-                          <div key={n.id} className="relative group">
-                            <button
-                              onClick={() => {
-                                markAsRead(n.id);
-                                if (n.linkUrl) go(n.linkUrl);
-                              }}
-                              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-app-bg text-left transition-colors pr-9"
-                            >
-                              <div className="mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-red-50">
-                                <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-bold text-text truncate">{n.titulo}</p>
-                                <p className="text-[10px] text-text-muted mt-0.5 whitespace-normal break-words">{n.mensaje}</p>
-                                <p className="text-[9px] font-semibold mt-1 text-primary">
-                                  {new Date(n.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}
-                                </p>
-                              </div>
-                            </button>
-                            <button
-                              onClick={(e) => handleDismissOne(n.id, e)}
-                              title="Marcar como leída"
-                              className="absolute top-2.5 right-2.5 w-5 h-5 rounded-md flex items-center justify-center text-text-muted hover:text-text hover:bg-app-bg opacity-0 group-hover:opacity-100 transition-all"
-                            >
-                              <X className="w-3 h-3" />
-                            </button>
-                          </div>
+                        {realNotifications.filter(n => !n.read).map(n => (
+                          <button
+                            key={n.id}
+                            onClick={() => handleNotificationClick(n)}
+                            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-app-bg text-left transition-colors"
+                          >
+                            <div className="mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-red-50">
+                              <AlertTriangle className="w-3.5 h-3.5 text-red-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-bold text-text truncate">{n.message}</p>
+                              <p className="text-[9px] font-semibold mt-1 text-primary">
+                                {relativeTime(n.createdAt)}
+                              </p>
+                            </div>
+                          </button>
                         ))}
                       </div>
                     )}
 
                     {/* Sección "Leídas" */}
-                    {readNotifications.length > 0 && (
+                    {realNotifications.filter(n => n.read).length > 0 && (
                       <div className="bg-app-bg/10">
                         <p className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider bg-app-bg/30 border-b border-border-subtle">
                           Leídas
                         </p>
-                        {readNotifications.map(n => (
-                          <div key={n.id} className="relative group">
-                            <button
-                              onClick={() => {
-                                if (n.linkUrl) go(n.linkUrl);
-                              }}
-                              className="w-full flex items-start gap-3 px-4 py-3 hover:bg-app-bg text-left transition-colors opacity-70"
-                            >
-                              <div className="mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-50">
-                                <Clock className="w-3.5 h-3.5 text-gray-500" />
-                              </div>
-                              <div className="flex-1 min-w-0">
-                                <p className="text-xs font-semibold text-text truncate">{n.titulo}</p>
-                                <p className="text-[10px] text-text-muted mt-0.5 whitespace-normal break-words">{n.mensaje}</p>
-                                <p className="text-[9px] font-normal mt-1 text-text-muted">
-                                  {new Date(n.fecha).toLocaleDateString('es-PE', { day: 'numeric', month: 'short' })}
-                                </p>
-                              </div>
-                            </button>
-                          </div>
+                        {realNotifications.filter(n => n.read).map(n => (
+                          <button
+                            key={n.id}
+                            onClick={() => handleNotificationClick(n)}
+                            className="w-full flex items-start gap-3 px-4 py-3 hover:bg-app-bg text-left transition-colors opacity-70"
+                          >
+                            <div className="mt-0.5 w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 bg-gray-50">
+                              <Clock className="w-3.5 h-3.5 text-gray-500" />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-xs font-semibold text-text truncate">{n.message}</p>
+                              <p className="text-[9px] font-normal mt-1 text-text-muted">
+                                {relativeTime(n.createdAt)}
+                              </p>
+                            </div>
+                          </button>
                         ))}
                       </div>
                     )}
@@ -286,31 +296,20 @@ export default function TopBar() {
               </div>
 
               {/* Footer */}
-              {unreadNotifications.length > 0 ? (
-                <div className="px-4 py-3 border-t border-border-subtle bg-app-bg/30 flex items-center justify-between gap-2">
-                  <button
-                    onClick={handleDismissAll}
-                    className="text-xs font-bold text-text-muted hover:text-text transition-colors"
-                  >
-                    Marcar todas como leídas
-                  </button>
-                  <button
-                    onClick={() => go('/pipeline')}
-                    className="text-xs font-bold text-primary hover:underline"
-                  >
-                    Ver pipeline →
-                  </button>
-                </div>
-              ) : (
-                <div className="px-4 py-3 border-t border-border-subtle bg-app-bg/30">
-                  <button
-                    onClick={() => go('/pipeline')}
-                    className="text-xs font-bold text-primary hover:underline w-full text-center"
-                  >
-                    Ver pipeline completo →
-                  </button>
-                </div>
-              )}
+              <div className="px-4 py-3 border-t border-border-subtle bg-app-bg/30 flex items-center justify-between gap-2">
+                <button
+                  onClick={() => go('/notifications')}
+                  className="text-xs font-bold text-text-muted hover:text-text transition-colors"
+                >
+                  Ver todas
+                </button>
+                <button
+                  onClick={() => go('/pipeline')}
+                  className="text-xs font-bold text-primary hover:underline"
+                >
+                  Ver pipeline →
+                </button>
+              </div>
             </div>
           )}
         </div>

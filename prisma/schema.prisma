@@ -52,6 +52,12 @@ enum UserRole {
   Trabajador
 }
 
+enum NotificationType {
+  ACTIVIDAD_PROXIMA
+  ACTIVIDAD_VENCIDA
+  GENERAL
+}
+
 // ─── Modelos ──────────────────────────────────────────────────────
 
 model User {
@@ -161,6 +167,7 @@ model Lead {
 
   actividades  Activity[]
   cotizaciones Quote[]
+  notificaciones Notification[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -215,4 +222,20 @@ model Quote {
   @@index([leadId])
   @@index([estado])
   @@index([anio])
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String           // Responsable asignado (User.id)
+  leadId    String?
+  type      NotificationType
+  message   String
+  read      Boolean          @default(false)
+  createdAt DateTime         @default(now())
+
+  lead      Lead?            @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, leadId, type])
+  @@index([userId])
+  @@index([createdAt])
 }

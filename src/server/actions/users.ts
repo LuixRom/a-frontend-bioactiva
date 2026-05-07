@@ -56,6 +56,22 @@ export async function listUsers(): Promise<PublicUser[]> {
   return rows.map(toPublic);
 }
 
+export async function findUserByEmail(email: string): Promise<PublicUser | null> {
+  const row = await prisma.user.findUnique({
+    where: { email: email.toLowerCase().trim() },
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      role: true,
+      active: true,
+      lastLogin: true,
+      createdAt: true,
+    },
+  });
+  return row ? toPublic(row) : null;
+}
+
 // ─── Mutaciones ────────────────────────────────────────────────────
 
 export type UserCreateInput = {
