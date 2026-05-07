@@ -6,7 +6,8 @@ import {
   FileText, Building2, ChevronRight,
 } from 'lucide-react';
 import Drawer from './Drawer';
-import { cn } from '@/src/lib/utils';
+import { cn, formatDate } from '@/src/lib/utils';
+import { validateRuc } from '@/src/lib/rucValidator';
 import type { SunatData } from './SunatInput';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -117,8 +118,14 @@ export default function ValidadorSunat({ isOpen, onClose }: ValidadorSunatProps)
       });
 
       if (!res.ok) {
+        if (res.status === 404) {
+          throw new Error('No se encontraron datos para el RUC ingresado');
+        }
+        if (res.status === 503 || res.status === 504) {
+          throw new Error('Servicio SUNAT no está disponible. Intente más tarde');
+        }
         const err = await res.json().catch(() => ({}));
-        throw new Error((err as any).error || `Error ${res.status}`);
+        throw new Error((err as any).error || 'Error de conexión con el servidor');
       }
 
       applySunatData(await res.json());
@@ -126,7 +133,7 @@ export default function ValidadorSunat({ isOpen, onClose }: ValidadorSunatProps)
       if (e.name === 'AbortError') {
         setError('La consulta tardó demasiado. Intenta de nuevo.');
       } else {
-        setError(e.message || 'Error desconocido al consultar SUNAT.');
+        setError(e.message || 'Error de conexión con el servidor');
       }
     } finally {
       setLoading(false);
@@ -152,8 +159,11 @@ export default function ValidadorSunat({ isOpen, onClose }: ValidadorSunatProps)
         });
 
         if (!res.ok) {
+          if (res.status === 503 || res.status === 504) {
+            throw new Error('Servicio SUNAT no está disponible. Intente más tarde');
+          }
           const err = await res.json().catch(() => ({}));
-          throw new Error((err as any).error || `Error ${res.status}`);
+          throw new Error((err as any).error || 'Error de conexión con el servidor');
         }
 
         const data = await res.json();
@@ -168,7 +178,7 @@ export default function ValidadorSunat({ isOpen, onClose }: ValidadorSunatProps)
         if (e.name === 'AbortError') {
           setError('La consulta tardó demasiado. Intenta de nuevo.');
         } else {
-          setError(e.message || 'Error desconocido al consultar SUNAT.');
+          setError(e.message || 'Error de conexión con el servidor');
         }
         setNombreResults([]);
         setShowNombreDropdown(false);
@@ -185,8 +195,9 @@ export default function ValidadorSunat({ isOpen, onClose }: ValidadorSunatProps)
     setShowNombreDropdown(false);
 
     if (modo === 'ruc') {
-      if (!/^\d{11}$/.test(q)) {
-        setError('Ingresa un RUC válido de 11 dígitos.');
+      const v = validateRuc(q);
+      if (!v.ok) {
+        setError('El RUC ingresado no es válido');
         setRawData(null);
         return;
       }

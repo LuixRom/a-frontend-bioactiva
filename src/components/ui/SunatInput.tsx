@@ -35,12 +35,12 @@ export default function SunatInput({
 }: SunatInputProps) {
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
-  const [error, setError] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const val = e.target.value.replace(/\D/g, '').slice(0, 11);
     onChange(val);
-    if (error) setError(false);
+    if (error) setError(null);
     if (success) setSuccess(false);
     // Limpiar datos previos apenas el usuario empieza a cambiar el número
     const isValid = val.length === 11;
@@ -60,7 +60,7 @@ export default function SunatInput({
     if (!isValidLength) {
       setLoading(false);
       setSuccess(false);
-      setError(false);
+      setError(null);
       return;
     }
 
@@ -69,13 +69,13 @@ export default function SunatInput({
     if (!validation.ok) {
       setLoading(false);
       setSuccess(false);
-      setError(false);
+      setError(null);
       return;
     }
 
     setLoading(true);
     setSuccess(false);
-    setError(false);
+    setError(null);
 
     const controller = new AbortController();
 
@@ -100,7 +100,7 @@ export default function SunatInput({
       } catch (err: unknown) {
         if ((err as Error).name === 'AbortError') return; // debounce cancel — ignore
         setLoading(false);
-        setError(true);
+        setError((err as any).message || 'Error desconocido');
       }
     };
 
@@ -171,12 +171,12 @@ export default function SunatInput({
       )}
       {error && (
         <p className="text-[10px] font-semibold text-red-500 ml-1">
-          No se encontraron datos en {sourceLabel}.
+          {error}
         </p>
       )}
-      {showFormatWarning && validationMsg && (
-        <p className="text-[10px] font-semibold text-amber-600 ml-1">
-          ⚠ {validationMsg}
+      {showFormatWarning && (
+        <p className="text-[10px] font-semibold text-red-500 ml-1">
+          ⚠ El RUC ingresado no es válido
         </p>
       )}
     </div>

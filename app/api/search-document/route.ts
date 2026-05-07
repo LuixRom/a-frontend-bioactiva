@@ -27,6 +27,18 @@ export async function GET(req: NextRequest) {
     const response = await fetch(url, { signal: AbortSignal.timeout(30000) });
 
     if (!response.ok) {
+      if (response.status === 404) {
+        return NextResponse.json(
+          { error: 'No se encontraron datos para el RUC ingresado' },
+          { status: 404 }
+        );
+      }
+      if (response.status === 503 || response.status === 504) {
+        return NextResponse.json(
+          { error: 'Servicio SUNAT no está disponible. Intente más tarde' },
+          { status: 503 }
+        );
+      }
       const error = await response.json().catch(() => ({}));
       return NextResponse.json(
         { error: (error as any).detail || 'Error consultando SUNAT' },
@@ -40,7 +52,7 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     console.error('[SUNAT proxy error]', err);
     return NextResponse.json(
-      { error: 'No se pudo conectar con el servicio SUNAT' },
+      { error: 'Error de conexión con el servidor' },
       { status: 503 }
     );
   }

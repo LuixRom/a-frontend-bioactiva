@@ -19,6 +19,12 @@ export async function GET(req: NextRequest) {
     );
 
     if (!res.ok) {
+      if (res.status === 503 || res.status === 504) {
+        return NextResponse.json(
+          { error: 'Servicio SUNAT no está disponible. Intente más tarde' },
+          { status: 503 }
+        );
+      }
       const err = await res.json().catch(() => ({}));
       return NextResponse.json(
         { error: (err as any).detail || 'Error consultando SUNAT' },
@@ -29,7 +35,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json(await res.json());
   } catch {
     return NextResponse.json(
-      { error: 'No se pudo conectar con el servicio SUNAT' },
+      { error: 'Error de conexión con el servidor' },
       { status: 503 }
     );
   }
