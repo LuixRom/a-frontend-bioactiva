@@ -7,7 +7,7 @@ import { prisma } from '@/src/server/db';
 import { Resend } from 'resend';
 import type { UserRole } from '@prisma/client';
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
 const DOMAIN = '@bioactiva.pe';
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
 
@@ -97,6 +97,9 @@ export async function inviteUser(email: string, role: UserRole) {
   const activationLink = `${APP_URL}/activate/${token}`;
   
   try {
+    if (!resend) {
+      throw new Error('Servicio de correo no configurado (RESEND_API_KEY falta)');
+    }
     const { error } = await resend.emails.send({
       from: 'Bioactiva CRM <onboarding@resend.dev>', // En prod usar dominio verificado
       to: [cleanEmail],

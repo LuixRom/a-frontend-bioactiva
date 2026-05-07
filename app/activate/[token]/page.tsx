@@ -2,6 +2,7 @@ import { getInvitationByToken } from '@/src/server/actions/invitations';
 import ActivationForm from './ActivationForm';
 import { AlertCircle, Clock } from 'lucide-react';
 import Link from 'next/link';
+import { connection } from 'next/server';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,7 @@ interface PageProps {
 }
 
 export default async function ActivatePage({ params }: PageProps) {
+  await connection();
   const { token } = await params;
   const invitation = await getInvitationByToken(token);
 
