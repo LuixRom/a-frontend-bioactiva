@@ -19,8 +19,8 @@ export type LeadEditableFields = {
 };
 
 export type LeadCreateInput = {
-  organizacionId: string;
-  contactoId?: string | null;
+  organizacionCodigo: string;
+  contactoCodigo?: string | null;
   servicioInteres: string;
   comentarios?: string;
   desafioOportunidad?: string;

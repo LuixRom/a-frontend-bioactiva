@@ -4,7 +4,7 @@ import { mockContacts } from '@/src/lib/mockData';
 import type { Contact } from '@/src/types/crm';
 
 export type ContactInput = {
-  organizacionId: string; // ID de la org
+  organizacionCodigo: string; // código humano de la org
   vocativo?: string | null;
   nombres: string;
   apellidos: string;

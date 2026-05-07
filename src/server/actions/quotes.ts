@@ -5,7 +5,7 @@ import type { Quote } from '@/src/types/crm';
 import type { EstadoCotizacion, Moneda } from '@/src/lib/constants';
 
 export type QuoteInput = {
-  leadId: string;
+  leadCodigo: string;
   anio: number;
   mes: string;
   dirigidoA: string;
