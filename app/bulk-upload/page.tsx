@@ -89,6 +89,7 @@ export default function BulkUploadPage() {
   });
 
   const [importing, setImporting] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [importResult, setImportResult] = useState<{ imported: number; total: number; errors: string[] } | null>(null);
 
   const processFile = useCallback(async (file: File) => {
@@ -468,13 +469,13 @@ export default function BulkUploadPage() {
                 <>
                   <FileSpreadsheet className="w-16 h-16 mx-auto mb-4 text-secondary" />
                   <p className="text-lg font-bold text-text mb-2">Arrastra tu archivo aquí</p>
-                  <p className="text-sm text-text-muted mb-8">Formatos aceptados: .xlsx, .xls</p>
+                  <p className="text-sm text-text-muted mb-8">Formatos aceptados: .xlsx, .xls o .csv</p>
                   <label className="btn-primary cursor-pointer">
                     <Upload className="w-4 h-4" />
                     Seleccionar archivo
                     <input
                       type="file"
-                      accept=".xlsx,.xls"
+                      accept=".xlsx,.xls,.csv"
                       className="hidden"
                       onChange={handleFileSelect}
                     />
@@ -584,11 +585,8 @@ export default function BulkUploadPage() {
 
               <div className="flex gap-3 justify-end pt-2">
                 <button onClick={reset} className="btn-secondary">Cancelar</button>
-                <button onClick={handleImport} disabled={importing} className="btn-primary disabled:opacity-50">
-                  {importing
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
-                    : <>Importar registros seleccionados</>
-                  }
+                <button onClick={() => setShowConfirm(true)} disabled={importing} className="btn-primary disabled:opacity-50">
+                  Importar registros seleccionados
                 </button>
               </div>
             </div>
@@ -628,6 +626,54 @@ export default function BulkUploadPage() {
             </div>
           )}
         </>
+      )}
+
+      {showConfirm && processedData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm">
+          <div className="bg-surface rounded-2xl border border-border-subtle shadow-xl p-8 max-w-md w-full mx-4 space-y-5 animate-fade-in">
+            <h2 className="text-lg font-black text-text">Confirmar importación</h2>
+            <p className="text-sm text-text-muted">
+              Se guardarán los siguientes registros en la base de datos. Esta acción no se puede deshacer.
+            </p>
+            <div className="rounded-xl bg-app-bg border border-border-subtle divide-y divide-border-subtle text-sm">
+              <div className="flex justify-between px-4 py-3">
+                <span className="text-text-muted">Organizaciones a importar</span>
+                <span className="font-bold text-text">{orgRows.filter(r => !r.omit).length}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3">
+                <span className="text-text-muted">Contactos a importar</span>
+                <span className="font-bold text-text">{contactRows.filter(r => !r.omit).length}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3">
+                <span className="text-text-muted">Leads</span>
+                <span className="font-bold text-text">{processedData.leads.length}</span>
+              </div>
+              <div className="flex justify-between px-4 py-3">
+                <span className="text-text-muted">Cotizaciones</span>
+                <span className="font-bold text-text">{processedData.quotes.length}</span>
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end">
+              <button
+                onClick={() => setShowConfirm(false)}
+                className="btn-secondary"
+                disabled={importing}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => { setShowConfirm(false); handleImport(); }}
+                disabled={importing}
+                className="btn-primary disabled:opacity-50"
+              >
+                {importing
+                  ? <><Loader2 className="w-4 h-4 animate-spin" /> Importando...</>
+                  : 'Confirmar importación'
+                }
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

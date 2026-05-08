@@ -4,7 +4,7 @@ import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   Plus, Download, ExternalLink, TrendingUp, CheckCircle2, Clock, ArrowUpRight,
-  Printer, Mail,
+  Printer, Mail, ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
 import { formatCurrency, formatDate, cn } from '@/src/lib/utils';
@@ -86,7 +86,7 @@ export default function QuotesClient({
 
   const [quotesList, setQuotesList] = useState<Quote[]>(initialQuotes);
   const [statusFilter, setStatusFilter] = useState<QuoteEstado | 'todos'>('todos');
-  const [showCreate, setShowCreate] = useState(false);
+  const [view, setView] = useState<'list' | 'new'>('list');
   const [form, setForm] = useState<QuoteFormState>(initialFormWithDefaults);
 
   const filtered = quotesList.filter(
@@ -262,7 +262,7 @@ export default function QuotesClient({
           linkPropuesta:   form.linkPropuesta.trim() || null,
         });
         setQuotesList((prev) => [created, ...prev]);
-        setShowCreate(false);
+        setView('list');
         setForm(buildInitialQuoteForm({ remitente: remitenteDefault }));
         showToast('Cotización creada', 'success');
         router.refresh();
@@ -305,25 +305,32 @@ export default function QuotesClient({
 
   return (
     <div className="space-y-8">
-      {/* Header */}
+      {/* Tabs */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-text">Registro de Cotizaciones</h1>
-          <p className="text-sm text-text-muted">Seguimiento detallado de propuestas comerciales enviadas.</p>
+        <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
+          <button
+            onClick={() => { setView('list'); setForm(buildInitialQuoteForm({ remitente: remitenteDefault })); }}
+            className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all', view === 'list' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
+          >
+            Cotizaciones
+          </button>
+          <button
+            onClick={() => setView('new')}
+            className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5', view === 'new' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
+          >
+            <Plus className="w-3.5 h-3.5" /> Nueva Cotización
+          </button>
         </div>
-        <div className="flex gap-3">
+        {view === 'list' && (
           <button className="btn-secondary">
             <Download className="w-4 h-4" /> Exportar Reporte
           </button>
-          <button className="btn-primary" onClick={() => setShowCreate(true)}>
-            <Plus className="w-4 h-4" /> Nueva Cotización
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Form drawer */}
-      <Drawer isOpen={showCreate} onClose={() => setShowCreate(false)} title="Nueva Cotización">
-        <div className="space-y-4">
+      {view === 'new' && (
+        <div className="max-w-2xl w-full mx-auto animate-fade-in">
+          <div className="rounded-2xl border border-border-subtle bg-surface p-8 space-y-4">
           {/* Autocompletar desde lead existente */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Autocompletar desde lead</label>
@@ -476,14 +483,19 @@ export default function QuotesClient({
           </div>
 
           <div className="flex gap-3 pt-2">
-            <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={() => { setView('list'); setForm(buildInitialQuoteForm({ remitente: remitenteDefault })); }} className="btn-secondary flex-1">
+              <ArrowLeft className="w-4 h-4" /> Volver a Cotizaciones
+            </button>
             <button onClick={handleCreate} disabled={!canSave} className="btn-primary flex-1 disabled:opacity-50">
               Guardar cotización
             </button>
           </div>
+          </div>
         </div>
-      </Drawer>
+      )}
 
+      {view === 'list' && (
+      <>
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((kpi, i) => (
@@ -516,6 +528,8 @@ export default function QuotesClient({
 
         <DataTable data={filtered} columns={columns} pageSize={8} />
       </div>
+      </>
+      )}
     </div>
   );
 }

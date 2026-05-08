@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Search, Users, Kanban, FileText, ExternalLink } from 'lucide-react';
+import { Plus, Search, Users, Kanban, FileText, ExternalLink, ArrowLeft } from 'lucide-react';
 import { TIPOS_ORG, TAMANOS_ORG, SECTORES } from '@/src/lib/constants';
 import type { Organization, Contact, Lead, Quote } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
@@ -45,7 +45,7 @@ export default function OrganizationsClient({
   const [, startTransition] = useTransition();
   const { showToast } = useToast();
   const [orgs, setOrgs] = useState<Organization[]>(initialOrgs);
-  const [showCreate, setShowCreate] = useState(false);
+  const [view, setView] = useState<'list' | 'new'>('list');
   const [showValidador, setShowValidador] = useState(false);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [isFlashActive, setIsFlashActive] = useState(false);
@@ -183,7 +183,7 @@ export default function OrganizationsClient({
               : form.contactoVigente.trim().toLowerCase() !== 'buscar contacto',
         });
         setOrgs((prev) => [created, ...prev]);
-        setShowCreate(false);
+        setView('list');
         setForm(emptyForm);
         showToast('Organización creada', 'success');
         router.refresh();
@@ -256,13 +256,29 @@ export default function OrganizationsClient({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
+      {/* Tabs */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-text">Gestión de Organizaciones</h1>
-          <p className="text-sm text-text-muted">Visualiza y administra tus clientes corporativos y sus datos fiscales.</p>
+        <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
+          <button
+            onClick={() => { setView('list'); setForm(emptyForm); }}
+            className={cn(
+              'px-5 py-2 rounded-lg text-sm font-bold transition-all',
+              view === 'list' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text',
+            )}
+          >
+            Organizaciones
+          </button>
+          <button
+            onClick={() => setView('new')}
+            className={cn(
+              'px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5',
+              view === 'new' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text',
+            )}
+          >
+            <Plus className="w-3.5 h-3.5" /> Nueva Organización
+          </button>
         </div>
-        <div className="flex items-center gap-2">
+        {view === 'list' && (
           <button
             onClick={() => setShowValidador(true)}
             className="btn-secondary flex items-center gap-2"
@@ -270,36 +286,37 @@ export default function OrganizationsClient({
             <Search className="w-4 h-4" />
             Validador SUNAT
           </button>
-          <button onClick={() => setShowCreate(true)} className="btn-primary">
-            <Plus className="w-4 h-4" /> Nueva Organización
-          </button>
-        </div>
+        )}
       </div>
 
-      {/* Main Table */}
-      <DataTable
-        data={orgs}
-        columns={columns}
-        pageSize={8}
-        searchPlaceholder="Buscar por ID, RUC, nombre, sector..."
-        extraSearchFields={(org) => [
-          org.id,
-          org.ruc ?? '',
-          org.nombre,
-          org.nombreCompleto ?? '',
-          org.sector ?? '',
-          org.area ?? '',
-          org.tipo ?? '',
-          org.ubicacion ?? '',
-        ]}
-      />
+      {view === 'list' && (
+        <>
+          <h1 className="text-2xl font-black text-text">Gestión de Organizaciones</h1>
+          <DataTable
+            data={orgs}
+            columns={columns}
+            pageSize={8}
+            searchPlaceholder="Buscar por ID, RUC, nombre, sector..."
+            extraSearchFields={(org) => [
+              org.id,
+              org.ruc ?? '',
+              org.nombre,
+              org.nombreCompleto ?? '',
+              org.sector ?? '',
+              org.area ?? '',
+              org.tipo ?? '',
+              org.ubicacion ?? '',
+            ]}
+          />
+        </>
+      )}
 
       {/* ── Validador Drawer ── */}
       <ValidadorSunat isOpen={showValidador} onClose={() => setShowValidador(false)} />
 
-      {/* ── Create Drawer ── */}
-      <Drawer isOpen={showCreate} onClose={() => setShowCreate(false)} title="Nueva Organización">
-        <div className="space-y-6">
+      {view === 'new' && (
+        <div className="max-w-2xl w-full mx-auto animate-fade-in">
+          <div className="rounded-2xl border border-border-subtle bg-surface p-8 space-y-6">
 
           {/* Auto ID (read-only) */}
           <div className="space-y-1.5">
@@ -565,7 +582,9 @@ export default function OrganizationsClient({
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={() => { setView('list'); setForm(emptyForm); }} className="btn-secondary flex-1">
+              <ArrowLeft className="w-4 h-4" /> Volver a Organizaciones
+            </button>
             <button
               onClick={handleCreate}
               disabled={!form.nombre.trim()}
@@ -574,8 +593,9 @@ export default function OrganizationsClient({
               Guardar Organización
             </button>
           </div>
+          </div>
         </div>
-      </Drawer>
+      )}
 
       {/* ── Detail Drawer ── */}
       <Drawer

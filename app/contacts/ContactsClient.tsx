@@ -2,9 +2,9 @@
 
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
-import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare, Sparkles } from 'lucide-react';
+import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare, Sparkles, ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
-import { getInitials } from '@/src/lib/utils';
+import { getInitials, cn } from '@/src/lib/utils';
 import { VOCATIVOS } from '@/src/lib/constants';
 import type { Contact, Organization, Lead } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
@@ -29,7 +29,7 @@ export default function ContactsClient({
   const { showToast } = useToast();
   const [contactsList, setContactsList] = useState<Contact[]>(initialContacts);
   const orgsList = organizations;
-  const [showCreate, setShowCreate] = useState(false);
+  const [view, setView] = useState<'list' | 'new'>('list');
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -61,7 +61,7 @@ export default function ContactsClient({
           comentarios: form.comentarios || null,
         });
         setContactsList((prev) => [created, ...prev]);
-        setShowCreate(false);
+        setView('list');
         setForm({
           vocativo: '',
           nombres: '',
@@ -158,49 +158,59 @@ export default function ContactsClient({
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-text">Directorio de Contactos</h1>
-          <p className="text-sm text-text-muted">Administra las personas clave y decisores de cada organización.</p>
-        </div>
-        <button onClick={() => setShowCreate(true)} className="btn-primary">
-          <Plus className="w-4 h-4" /> Nuevo Contacto
+      {/* Tabs */}
+      <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
+        <button
+          onClick={() => { setView('list'); setForm({ vocativo: '', nombres: '', apellidos: '', correo1: '', correo2: '', cargo: '', telefono: '', comentarios: '', organizacionId: '' }); }}
+          className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all', view === 'list' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
+        >
+          Contactos
+        </button>
+        <button
+          onClick={() => setView('new')}
+          className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5', view === 'new' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
+        >
+          <Plus className="w-3.5 h-3.5" /> Nuevo Contacto
         </button>
       </div>
 
-      {/* Main Table */}
-      <DataTable
-        data={contactsList}
-        columns={columns}
-        pageSize={10}
-        searchPlaceholder="Buscar por nombre, email, cargo, organización..."
-        extraSearchFields={(c) => {
-          const org = orgsList.find(o => o.id === c.organizacionId);
-          return [
-            c.id,
-            c.nombres,
-            c.apellidos,
-            `${c.nombres} ${c.apellidos}`,
-            c.correo1 ?? '',
-            c.correo2 ?? '',
-            c.cargo ?? '',
-            c.telefono ?? '',
-            org?.nombre ?? '',
-            org?.ruc ?? '',
-            org?.sector ?? '',
-          ];
-        }}
-      />
+      {view === 'list' && (
+        <>
+          <h1 className="text-2xl font-black text-text">Directorio de Contactos</h1>
+          <DataTable
+            data={contactsList}
+            columns={columns}
+            pageSize={10}
+            searchPlaceholder="Buscar por nombre, email, cargo, organización..."
+            extraSearchFields={(c) => {
+              const org = orgsList.find(o => o.id === c.organizacionId);
+              return [
+                c.id,
+                c.nombres,
+                c.apellidos,
+                `${c.nombres} ${c.apellidos}`,
+                c.correo1 ?? '',
+                c.correo2 ?? '',
+                c.cargo ?? '',
+                c.telefono ?? '',
+                org?.nombre ?? '',
+                org?.ruc ?? '',
+                org?.sector ?? '',
+              ];
+            }}
+          />
+        </>
+      )}
 
-      {/* Create Contact Drawer */}
-      <Drawer isOpen={showCreate} onClose={() => setShowCreate(false)} title="Nuevo Contacto">
-        <div className="space-y-6">
+      {view === 'new' && (
+        <div className="max-w-2xl w-full mx-auto animate-fade-in">
+          <div className="rounded-2xl border border-border-subtle bg-surface p-8 space-y-6">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
               Organización <span className="text-red-500">*</span>
             </label>
             <OrgTypeahead
+              label=""
               options={organizations}
               value={form.organizacionId}
               onChange={(id) => setForm({ ...form, organizacionId: id })}
@@ -305,7 +315,9 @@ export default function ContactsClient({
           </div>
 
           <div className="flex gap-3 pt-4">
-            <button onClick={() => setShowCreate(false)} className="btn-secondary flex-1">Cancelar</button>
+            <button onClick={() => { setView('list'); setForm({ vocativo: '', nombres: '', apellidos: '', correo1: '', correo2: '', cargo: '', telefono: '', comentarios: '', organizacionId: '' }); }} className="btn-secondary flex-1">
+              <ArrowLeft className="w-4 h-4" /> Volver a Contactos
+            </button>
             <button
               onClick={handleCreateContact}
               disabled={!form.nombres || !form.organizacionId}
@@ -314,8 +326,9 @@ export default function ContactsClient({
               Guardar Contacto
             </button>
           </div>
+          </div>
         </div>
-      </Drawer>
+      )}
 
       {/* Detail Drawer */}
       <Drawer isOpen={!!selectedContactId} onClose={() => setSelectedContactId(null)} title="Perfil del Contacto">

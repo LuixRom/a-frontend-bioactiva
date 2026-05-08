@@ -24,7 +24,7 @@ type NavItem = {
 
 const baseMenuItems: NavItem[] = [
   { href: '/',               label: 'Dashboard',     icon: LayoutDashboard },
-  { href: '/organizations',  label: 'Entidades',      icon: Building2 },
+  { href: '/organizations',  label: 'Organizaciones',      icon: Building2 },
   { href: '/contacts',       label: 'Contactos',      icon: Users },
   { href: '/pipeline',       label: 'Pipeline',       icon: Kanban },
   { href: '/quotes',         label: 'Cotizaciones',   icon: FileText },

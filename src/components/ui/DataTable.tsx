@@ -125,13 +125,14 @@ export default function DataTable<T extends { id: string }>({
               <span className="text-primary font-bold">{filtered.length}</span> de {data.length}
             </span>
           )}
-          <button
-            onClick={onExport}
-            disabled={!onExport}
-            className="btn-secondary py-2 flex-1 sm:flex-none disabled:opacity-40"
-          >
-            Exportar CSV
-          </button>
+          {onExport && (
+            <button
+              onClick={onExport}
+              className="btn-secondary py-2 flex-1 sm:flex-none"
+            >
+              Exportar CSV
+            </button>
+          )}
         </div>
       </div>
 

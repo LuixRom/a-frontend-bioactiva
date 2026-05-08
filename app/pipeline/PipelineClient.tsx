@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
-import { Plus, Download } from 'lucide-react';
+import { Plus, Download, ArrowLeft } from 'lucide-react';
 import type { Lead, Organization, Contact } from '@/src/types/crm';
 import { KanbanColumn } from '@/src/components/pipeline/KanbanColumn';
 import LeadPanel from '@/src/components/pipeline/LeadPanel';
@@ -15,7 +15,7 @@ import FilterPanel, {
 } from '@/src/components/filters/FilterPanel';
 import { useToast } from '@/src/components/ui/Toast';
 import { exportToCsv } from '@/src/lib/exportCsv';
-import Drawer from '@/src/components/ui/Drawer';
+import { cn } from '@/src/lib/utils';
 import OrgTypeahead from '@/src/components/ui/OrgTypeahead';
 import { ESTADOS_LEAD } from '@/src/lib/constants';
 import { useAuthStore } from '@/src/store/authStore';
@@ -96,7 +96,7 @@ export default function PipelineClient({
 
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [showNewLead, setShowNewLead] = useState(!!prefill);
+  const [view, setView] = useState<'pipeline' | 'new-lead'>(prefill ? 'new-lead' : 'pipeline');
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
   const [leadForm, setLeadForm] = useState<LeadFormState>(() => {
     const base = buildEmptyLeadForm(defaultsForNewLead);
@@ -143,7 +143,7 @@ export default function PipelineClient({
 
   // Callbacks estables — críticos para que el drag no se reverta.
   const handleCardSelect  = useCallback((lead: Lead) => setSelectedLead(lead), []);
-  const handleAddLead     = useCallback(() => setShowNewLead(true), []);
+  const handleAddLead     = useCallback(() => setView('new-lead'), []);
   const handlePanelClose  = useCallback(() => setSelectedLead(null), []);
 
   const handleDragEnd = useCallback(
@@ -271,7 +271,7 @@ export default function PipelineClient({
 
   const resetLeadForm = useCallback(() => {
     setLeadForm(buildEmptyLeadForm(defaultsForNewLead));
-    setShowNewLead(false);
+    setView('pipeline');
   }, [defaultsForNewLead]);
 
   const handleLeadCreate = useCallback(() => {
@@ -306,7 +306,7 @@ export default function PipelineClient({
         setLeads((prev) => [created, ...prev]);
         setSelectedLead(created);
         setLeadForm(buildEmptyLeadForm(defaultsForNewLead));
-        setShowNewLead(false);
+        setView('pipeline');
         showToast('Lead creado correctamente', 'success');
         router.refresh();
       } catch (err) {
@@ -330,44 +330,69 @@ export default function PipelineClient({
 
   return (
     <div className="flex flex-col h-full space-y-4">
+      {/* Tabs */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-black text-text">Pipeline Comercial</h1>
-          <p className="text-sm text-text-muted">
+        <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
+          <button
+            onClick={resetLeadForm}
+            className={cn(
+              'px-5 py-2 rounded-lg text-sm font-bold transition-all',
+              view === 'pipeline' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text',
+            )}
+          >
+            Pipeline
+          </button>
+          <button
+            onClick={() => setView('new-lead')}
+            className={cn(
+              'px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5',
+              view === 'new-lead'
+                ? 'bg-green-600 text-white shadow-sm'
+                : 'bg-green-50 text-green-700 hover:bg-green-100',
+            )}
+          >
+            <Plus className="w-3.5 h-3.5" /> Nuevo Lead
+          </button>
+        </div>
+        {view === 'pipeline' && (
+          <button onClick={handleExport} className="btn-secondary">
+            <Download className="w-4 h-4" /> Exportar CSV
+          </button>
+        )}
+      </div>
+
+      {view === 'pipeline' && (
+        <>
+          <FilterPanel
+            leads={leads}
+            organizations={organizations}
+            filters={filters}
+            onChange={setFilters}
+          />
+          <p className="text-sm text-text-muted -mt-2">
             Mostrando{' '}
             <span className="text-primary font-bold">{filteredLeads.length}</span>{' '}
             de <span className="font-bold">{leads.length}</span> leads
           </p>
-        </div>
-        <button onClick={handleExport} className="btn-secondary">
-          <Download className="w-4 h-4" /> Exportar CSV
-        </button>
-      </div>
-
-      <FilterPanel
-        leads={leads}
-        organizations={organizations}
-        filters={filters}
-        onChange={setFilters}
-      />
-
-      <div className="flex-1 overflow-x-auto">
-        <DragDropContext onDragEnd={handleDragEnd}>
-          <div className="flex gap-4 pb-6 min-h-[600px]">
-            {COLUMNAS.map((col) => (
-              <KanbanColumn
-                key={col.id}
-                column={col}
-                leads={leadsByStatus[col.id] ?? []}
-                orgNombreById={orgNombreById}
-                contactoNombreById={contactoNombreById}
-                onCardSelect={handleCardSelect}
-                onAddLead={handleAddLead}
-              />
-            ))}
+          <div className="flex-1 overflow-x-auto">
+            <DragDropContext onDragEnd={handleDragEnd}>
+              <div className="flex gap-4 pb-6 min-h-[600px]">
+                {COLUMNAS.map((col) => (
+                  <KanbanColumn
+                    key={col.id}
+                    column={col}
+                    leads={leadsByStatus[col.id] ?? []}
+                    orgNombreById={orgNombreById}
+                    contactoNombreById={contactoNombreById}
+                    onCardSelect={handleCardSelect}
+                    onAddLead={handleAddLead}
+                  />
+                ))}
+              </div>
+            </DragDropContext>
           </div>
-        </DragDropContext>
-      </div>
+        </>
+      )}
 
       <LeadPanel
         lead={selectedLead}
@@ -389,8 +414,9 @@ export default function PipelineClient({
         onCancel={handleCloseCancel}
       />
 
-      <Drawer isOpen={showNewLead} onClose={resetLeadForm} title="Nuevo Lead">
-        <div className="space-y-6">
+      {view === 'new-lead' && (
+        <div className="max-w-2xl w-full mx-auto animate-fade-in">
+          <div className="rounded-2xl border border-border-subtle bg-surface p-8 space-y-6">
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
               ID Lead{' '}
@@ -658,7 +684,7 @@ export default function PipelineClient({
 
           <div className="flex gap-3 pt-2">
             <button onClick={resetLeadForm} className="btn-secondary flex-1">
-              Cancelar
+              <ArrowLeft className="w-4 h-4" /> Volver al pipeline
             </button>
             <button
               onClick={handleLeadCreate}
@@ -668,16 +694,9 @@ export default function PipelineClient({
               Guardar lead
             </button>
           </div>
+          </div>
         </div>
-      </Drawer>
-
-      <button
-        onClick={() => setShowNewLead(true)}
-        className="fixed bottom-8 right-8 z-30 flex items-center gap-2 px-5 py-3 bg-primary text-white rounded-2xl shadow-lg hover:shadow-xl hover:brightness-110 transition-all font-bold text-sm"
-      >
-        <Plus className="w-5 h-5" />
-        Nuevo lead
-      </button>
+      )}
     </div>
   );
 }
