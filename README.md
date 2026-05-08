@@ -532,6 +532,21 @@ Panel lateral de detalle del lead con:
 - **Mejoras generales**:
   - Optimización de la experiencia de usuario con carga de perfil y estado persistente en localStorage/sessionStorage.
 
+### 08/05/2026 — rama implementacion_joel (commit f129d4b)
+
+- **Sidebar**: ítem "Entidades" renombrado a "Organizaciones"
+- **DataTable**: botón "Exportar CSV" oculto cuando no se pasa prop `onExport` (antes aparecía deshabilitado en todas las tablas)
+- **Importar / Exportar** (`bulk-upload`):
+  - Soporte de archivos `.csv` agregado (además de `.xlsx` y `.xls`)
+  - Modal de confirmación antes de ejecutar la importación: muestra resumen de organizaciones, contactos, leads y cotizaciones a importar
+- **Formularios de creación convertidos de drawer lateral a pestaña inline** en todos los módulos:
+  - **Organizaciones**: tabs `Organizaciones | + Nueva Organización`
+  - **Contactos**: tabs `Contactos | + Nuevo Contacto`; corregida label duplicada de "Organización" en el OrgTypeahead
+  - **Pipeline**: tabs `Pipeline | + Nuevo Lead`; botón "+ Nuevo Lead" con fondo verde
+  - **Cotizaciones**: tabs `Cotizaciones | + Nueva Cotización`; KPIs y tabla solo visibles en pestaña lista
+  - Cada formulario muestra botón "Volver a..." en lugar de "Cancelar"
+  - Los drawers de **detalle** (perfil de contacto, detalle de organización, panel de lead, Validador SUNAT) se mantienen sin cambios
+
 ---
 
 ## Estado actual del sistema
