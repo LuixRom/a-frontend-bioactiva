@@ -565,6 +565,70 @@ export default function LeadPanel({
               : <><Save className="w-4 h-4" /> Guardar cambios</>
             }
           </button>
+
+          {/* Seguimientos programados */}
+          <div className="space-y-3 pt-2">
+            <p className="text-xs font-bold text-text uppercase tracking-wider">Seguimientos programados</p>
+            {scheduledActivities.length === 0 ? (
+              <p className="text-sm text-text-muted italic">Sin seguimientos programados.</p>
+            ) : (
+              <div className="space-y-2">
+                {scheduledActivities.map(activity => {
+                  const status = getActivityStatus(activity);
+                  const badgeClass = {
+                    pendiente: 'bg-amber-100 text-amber-700',
+                    realizada: 'bg-green-100 text-green-700',
+                    vencida:   'bg-red-100 text-red-700',
+                  }[status];
+                  return (
+                    <div key={activity.id} className="p-4 bg-surface border border-border-subtle rounded-xl space-y-3">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-bold text-text">{activity.nota}</p>
+                          <p className="text-[10px] text-text-muted uppercase tracking-wider mt-1">
+                            {activity.tipo} · {new Date(activity.fecha).toLocaleDateString('es-PE')}
+                          </p>
+                        </div>
+                        <span className={cn('px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider', badgeClass)}>
+                          {status}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between gap-3">
+                        <p className="text-xs text-text-muted">Responsable: <span className="font-bold text-text">{activity.responsable}</span></p>
+                        <div className="flex gap-2">
+                          {activity.linkReunion && (
+                            <a
+                              href={activity.linkReunion}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="px-3 py-1.5 bg-[#5059C9] text-white rounded-lg text-xs font-bold hover:bg-[#4048A8] transition-colors flex items-center gap-1.5 shadow-sm"
+                            >
+                              Unirse
+                            </a>
+                          )}
+                          {activity.estado !== 'realizada' ? (
+                            <button
+                              onClick={() => handleActivityStateChange(activity.id, 'realizada')}
+                              className="btn-secondary py-2 text-xs"
+                            >
+                              <CheckCircle2 className="w-4 h-4" /> Marcar realizada
+                            </button>
+                          ) : (
+                            <button
+                              onClick={() => handleActivityStateChange(activity.id, 'pendiente')}
+                              className="btn-secondary py-2 text-xs"
+                            >
+                              <RotateCcw className="w-4 h-4" /> Reabrir
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
       )}
 
@@ -742,73 +806,8 @@ export default function LeadPanel({
             </button>
           </div>
 
-          <div className="space-y-4">
-            <p className="text-xs font-bold text-text uppercase tracking-wider">Seguimientos programados</p>
-            {scheduledActivities.length === 0 ? (
-              <p className="text-sm text-text-muted italic">Sin seguimientos programados.</p>
-            ) : (
-              <div className="space-y-2">
-                {scheduledActivities.map(activity => {
-                  const status = getActivityStatus(activity);
-                  const badgeClass = {
-                    pendiente: 'bg-amber-100 text-amber-700',
-                    realizada: 'bg-green-100 text-green-700',
-                    vencida: 'bg-red-100 text-red-700',
-                  }[status];
-
-                  return (
-                    <div key={activity.id} className="p-4 bg-surface border border-border-subtle rounded-xl space-y-3">
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="text-sm font-bold text-text">{activity.nota}</p>
-                          <p className="text-[10px] text-text-muted uppercase tracking-wider mt-1">
-                            {activity.tipo} · {new Date(activity.fecha).toLocaleDateString('es-PE')}
-                          </p>
-                        </div>
-                        <span className={cn('px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider', badgeClass)}>
-                          {status}
-                        </span>
-                      </div>
-
-                      <div className="flex items-center justify-between gap-3">
-                        <p className="text-xs text-text-muted">Responsable: <span className="font-bold text-text">{activity.responsable}</span></p>
-                        <div className="flex gap-2">
-                          {activity.linkReunion && (
-                            <a
-                              href={activity.linkReunion}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="px-3 py-1.5 bg-[#5059C9] text-white rounded-lg text-xs font-bold hover:bg-[#4048A8] transition-colors flex items-center gap-1.5 shadow-sm"
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M14 6C14 7.65685 12.6569 9 11 9C9.34315 9 8 7.65685 8 6C8 4.34315 9.34315 3 11 3C12.6569 3 14 4.34315 14 6Z" fill="#FFF"/><path d="M20 7C20 8.10457 19.1046 9 18 9C16.8954 9 16 8.10457 16 7C16 5.89543 16.8954 5 18 5C19.1046 5 20 5.89543 20 7Z" fill="#EAEBFA"/><path d="M14 14.5C14 16.9853 11.9853 19 9.5 19C7.01472 19 5 16.9853 5 14.5C5 12.567 6.25329 10.9262 8 10.25V10H11C12.6569 10 14 11.3431 14 13V14.5Z" fill="#FFF"/><path d="M19.5 18C18.6716 18 18 17.3284 18 16.5V13.5C18 12.6716 17.3284 12 16.5 12H13.75C14.5267 12.6738 15 13.5284 15 14.5V16C15 17.1046 15.8954 18 17 18H19.5Z" fill="#EAEBFA"/></svg>
-                              Unirse
-                            </a>
-                          )}
-                          {activity.estado !== 'realizada' ? (
-                            <button
-                              onClick={() => handleActivityStateChange(activity.id, 'realizada')}
-                              className="btn-secondary py-2 text-xs"
-                            >
-                              <CheckCircle2 className="w-4 h-4" /> Marcar realizada
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleActivityStateChange(activity.id, 'pendiente')}
-                              className="btn-secondary py-2 text-xs"
-                            >
-                              <RotateCcw className="w-4 h-4" /> Reabrir
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-
-          {/* Timeline */}
+          {/* Historial */}
+          <p className="text-xs font-bold text-text uppercase tracking-wider">Historial</p>
           <Timeline
             items={lead.actividades.map(a => ({
               id: a.id,
