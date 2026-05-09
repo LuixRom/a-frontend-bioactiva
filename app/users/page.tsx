@@ -1,4 +1,5 @@
-import { listUsers, type PublicUser } from '@/src/server/actions/users';
+import { listUsers } from '@/src/server/actions/users';
+import type { PublicUser } from '@/src/server/types';
 import { listInvitations } from '@/src/server/actions/invitations';
 import UsersClient from './UsersClient';
 import { mockUsers } from '@/src/lib/mockData';

@@ -1,16 +1,8 @@
 'use server';
 
 import type { UserRole } from '@/src/lib/constants';
-
-export type PublicUser = {
-  id: string;
-  email: string;
-  name: string;
-  role: UserRole;
-  active: boolean;
-  lastLogin: Date | null;
-  createdAt: Date;
-};
+import { MOCK_USERS } from '../mockStore';
+import type { PublicUser } from '../types';
 
 export type UserCreateInput = {
   email: string;
@@ -26,49 +18,6 @@ export type UserUpdateInput = {
   role?: UserRole;
   active?: boolean;
 };
-
-const MOCK_USERS: (PublicUser & { passwordHash: string })[] = [
-  {
-    id: 'mock-admin',
-    email: 'admin@bioactiva.pe',
-    name: 'Administrador Bioactiva',
-    role: 'Administrador',
-    active: true,
-    lastLogin: new Date(),
-    createdAt: new Date('2025-01-01'),
-    passwordHash: 'Bioactiva2025!'
-  },
-  {
-    id: 'mock-worker-1',
-    email: 'trabajador1@bioactiva.pe',
-    name: 'Juan Trabajador',
-    role: 'Trabajador',
-    active: true,
-    lastLogin: new Date(),
-    createdAt: new Date('2025-02-01'),
-    passwordHash: 'Bioactiva2025!'
-  },
-  {
-    id: 'mock-worker-2',
-    email: 'trabajador2@bioactiva.pe',
-    name: 'Maria Vendedora',
-    role: 'Trabajador',
-    active: true,
-    lastLogin: new Date(),
-    createdAt: new Date('2025-02-05'),
-    passwordHash: 'Bioactiva2025!'
-  },
-  {
-    id: 'mock-worker-3',
-    email: 'trabajador3@bioactiva.pe',
-    name: 'Carlos Soporte',
-    role: 'Trabajador',
-    active: true,
-    lastLogin: new Date(),
-    createdAt: new Date('2025-02-10'),
-    passwordHash: 'Bioactiva2025!'
-  }
-];
 
 export async function listUsers(): Promise<PublicUser[]> {
   return MOCK_USERS.map(({ passwordHash, ...u }) => u);
@@ -99,6 +48,10 @@ export async function updateUser(id: string, patch: UserUpdateInput): Promise<Pu
 }
 
 export async function updateUserPassword(id: string, newPassword: string): Promise<{ ok: true }> {
+  const userIndex = MOCK_USERS.findIndex(u => u.id === id);
+  if (userIndex !== -1) {
+    MOCK_USERS[userIndex].passwordHash = newPassword;
+  }
   return { ok: true };
 }
 

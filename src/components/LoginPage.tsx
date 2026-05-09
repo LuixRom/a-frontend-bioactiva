@@ -1,19 +1,23 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
-import { Eye, EyeOff, Leaf } from 'lucide-react';
+import { Eye, EyeOff, Leaf, CheckCircle } from 'lucide-react';
 import { verifyCredentials } from '@/src/server/actions/users';
 
 export default function LoginPage() {
   const router = useRouter();
   const { login } = useAuthStore();
+  const searchParams = useSearchParams();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+
+  const mensaje = searchParams.get('mensaje');
+  const showSuccess = mensaje === 'contrasena-actualizada';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -89,6 +93,13 @@ export default function LoginPage() {
               </div>
             )}
 
+            {showSuccess && (
+              <div className="flex items-center gap-2 rounded-lg px-4 py-2.5 text-sm font-medium" style={{ background: '#f0fff4', color: '#276749', border: '1px solid #c6f6d5' }}>
+                <CheckCircle className="w-4 h-4" />
+                Tu contraseña fue actualizada correctamente.
+              </div>
+            )}
+
             <div className="space-y-1">
               <label className="text-xs font-semibold uppercase tracking-wide" style={{ color: '#4a7c5e' }}>Correo electrónico</label>
               <input
@@ -136,6 +147,17 @@ export default function LoginPage() {
             >
               {loading ? 'Ingresando...' : 'Ingresar'}
             </button>
+
+            <div className="text-center">
+              <button
+                type="button"
+                onClick={() => router.push('/recuperar-contrasena')}
+                className="text-xs font-medium transition-colors hover:underline"
+                style={{ color: '#1C7E3C' }}
+              >
+                ¿Olvidaste tu contraseña?
+              </button>
+            </div>
           </form>
         </div>
       </div>

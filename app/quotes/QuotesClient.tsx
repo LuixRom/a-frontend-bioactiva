@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import {
-  Plus, Download, ExternalLink, TrendingUp, CheckCircle2, Clock, ArrowUpRight,
+  Plus, ExternalLink, TrendingUp, CheckCircle2, Clock, ArrowUpRight,
   Printer, Mail, ArrowLeft,
 } from 'lucide-react';
 import Link from 'next/link';
@@ -321,11 +321,6 @@ export default function QuotesClient({
             <Plus className="w-3.5 h-3.5" /> Nueva Cotización
           </button>
         </div>
-        {view === 'list' && (
-          <button className="btn-secondary">
-            <Download className="w-4 h-4" /> Exportar Reporte
-          </button>
-        )}
       </div>
 
       {view === 'new' && (
