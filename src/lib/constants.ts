@@ -13,18 +13,18 @@ export const ESTADOS_LEAD: ReadonlyArray<{
   label: string;
   color: string; // tailwind-friendly hex
 }> = [
-  { id: 'nuevo',            label: 'Nuevo',            color: '#6B7280' },
-  { id: 'en_proceso',       label: 'En proceso',       color: '#F59E0B' },
-  { id: 'cerrado_ganado',   label: 'Cerrado ganado',   color: '#10B981' },
-  { id: 'cerrado_perdido',  label: 'Cerrado perdido',  color: '#EF4444' },
+  { id: 'nuevo',            label: 'En prospecto',     color: '#6B7280' },
+  { id: 'en_proceso',       label: 'Ofertado',         color: '#F59E0B' },
+  { id: 'cerrado_ganado',   label: 'Cierre con venta', color: '#10B981' },
+  { id: 'cerrado_perdido',  label: 'Cierre sin venta', color: '#EF4444' },
 ] as const;
 
 /** Mapa de los labels exactos del Excel a los IDs internos. */
 export const ESTADO_LEAD_FROM_EXCEL: Record<string, EstadoLead> = {
-  'Nuevo':            'nuevo',
-  'En proceso':       'en_proceso',
-  'Cerrado ganado':   'cerrado_ganado',
-  'Cerrado perdido':  'cerrado_perdido',
+  'En prospecto':     'nuevo',
+  'Ofertado':         'en_proceso',
+  'Cierre con venta': 'cerrado_ganado',
+  'Cierre sin venta': 'cerrado_perdido',
 };
 
 // ─── Vocativos (hoja Contactos · columna "Vocativo") ───────────────

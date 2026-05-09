@@ -3,7 +3,7 @@
 import { useState, useMemo, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
-import { Plus, Download, ArrowLeft } from 'lucide-react';
+import { Plus, ArrowLeft } from 'lucide-react';
 import type { Lead, Organization, Contact } from '@/src/types/crm';
 import { KanbanColumn } from '@/src/components/pipeline/KanbanColumn';
 import LeadPanel from '@/src/components/pipeline/LeadPanel';
@@ -354,11 +354,6 @@ export default function PipelineClient({
             <Plus className="w-3.5 h-3.5" /> Nuevo Lead
           </button>
         </div>
-        {view === 'pipeline' && (
-          <button onClick={handleExport} className="btn-secondary">
-            <Download className="w-4 h-4" /> Exportar CSV
-          </button>
-        )}
       </div>
 
       {view === 'pipeline' && (
