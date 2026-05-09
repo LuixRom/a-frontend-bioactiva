@@ -51,14 +51,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [setMsToken, setMsAccountUsername, showToast, userEmail]);
 
   const pathname = usePathname();
-  const isActivationPage = pathname?.startsWith('/activate');
+  const isPublicPage = pathname?.startsWith('/activate') || pathname?.startsWith('/recuperar-contrasena');
 
   if (!mounted) {
     return null;
   }
 
-  // Allow public access to activation pages
-  if (isActivationPage) {
+  // Allow public access to activation and recovery pages
+  if (isPublicPage) {
     return (
       <div className="min-h-screen bg-app-bg font-sans">
         <main className="flex-1 p-6 animate-fade-in">
