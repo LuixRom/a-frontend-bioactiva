@@ -17,8 +17,10 @@ import { useToast } from '@/src/components/ui/Toast';
 import { exportToCsv } from '@/src/lib/exportCsv';
 import { cn } from '@/src/lib/utils';
 import OrgTypeahead from '@/src/components/ui/OrgTypeahead';
+import LeadEditView from '@/src/components/pipeline/LeadEditView';
 import { ESTADOS_LEAD } from '@/src/lib/constants';
 import { useAuthStore } from '@/src/store/authStore';
+import { useSidebarStore } from '@/src/store/sidebarStore';
 import {
   updateLeadEstado,
   createLead,
@@ -85,6 +87,7 @@ export default function PipelineClient({
   const { showToast } = useToast();
   const userName  = useAuthStore((s) => s.userName);
   const userEmail = useAuthStore((s) => s.userEmail);
+  const { close: closeSidebar, open: openSidebar } = useSidebarStore();
 
   const defaultsForNewLead = useMemo(
     () => ({
@@ -96,7 +99,8 @@ export default function PipelineClient({
 
   const [leads, setLeads] = useState<Lead[]>(initialLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [view, setView] = useState<'pipeline' | 'new-lead'>(prefill ? 'new-lead' : 'pipeline');
+  const [editingLead, setEditingLead] = useState<Lead | null>(null);
+  const [view, setView] = useState<'pipeline' | 'new-lead' | 'edit-lead'>(prefill ? 'new-lead' : 'pipeline');
   const [filters, setFilters] = useState<FilterState>(emptyFilters);
   const [leadForm, setLeadForm] = useState<LeadFormState>(() => {
     const base = buildEmptyLeadForm(defaultsForNewLead);
@@ -142,9 +146,9 @@ export default function PipelineClient({
   }, [contacts]);
 
   // Callbacks estables — críticos para que el drag no se reverta.
-  const handleCardSelect  = useCallback((lead: Lead) => setSelectedLead(lead), []);
+  const handleCardSelect  = useCallback((lead: Lead) => { setSelectedLead(lead); closeSidebar(); }, [closeSidebar]);
   const handleAddLead     = useCallback(() => setView('new-lead'), []);
-  const handlePanelClose  = useCallback(() => setSelectedLead(null), []);
+  const handlePanelClose  = useCallback(() => { setSelectedLead(null); openSidebar(); }, [openSidebar]);
 
   const handleDragEnd = useCallback(
     async (result: DropResult) => {
@@ -239,7 +243,15 @@ export default function PipelineClient({
   const handleLeadUpdate = useCallback((updated: Lead) => {
     setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
     setSelectedLead(updated);
+    setEditingLead(updated);
   }, []);
+
+  const handleEditLead = useCallback(() => {
+    if (!selectedLead) return;
+    setEditingLead(selectedLead);
+    setSelectedLead(null);
+    setView('edit-lead');
+  }, [selectedLead]);
 
   const handleExport = () => {
     exportToCsv(
@@ -272,7 +284,8 @@ export default function PipelineClient({
   const resetLeadForm = useCallback(() => {
     setLeadForm(buildEmptyLeadForm(defaultsForNewLead));
     setView('pipeline');
-  }, [defaultsForNewLead]);
+    openSidebar();
+  }, [defaultsForNewLead, openSidebar]);
 
   const handleLeadCreate = useCallback(() => {
     // Solo organización + servicio son obligatorios. El contacto es opcional
@@ -305,6 +318,7 @@ export default function PipelineClient({
         const created = await createLead(input);
         setLeads((prev) => [created, ...prev]);
         setSelectedLead(created);
+        closeSidebar();
         setLeadForm(buildEmptyLeadForm(defaultsForNewLead));
         setView('pipeline');
         showToast('Lead creado correctamente', 'success');
@@ -392,13 +406,10 @@ export default function PipelineClient({
       <LeadPanel
         lead={selectedLead}
         orgNombre={panelOrg?.nombre ?? ''}
-        contactoNombre={
-          panelContact ? `${panelContact.nombres} ${panelContact.apellidos}` : '—'
-        }
-        contactoEmail={panelContact?.correo1}
+        contactoNombre={panelContact ? `${panelContact.nombres} ${panelContact.apellidos}` : '—'}
         isOpen={!!selectedLead}
         onClose={handlePanelClose}
-        onLeadUpdate={handleLeadUpdate}
+        onEdit={handleEditLead}
       />
 
       <CloseLeadDialog
@@ -692,6 +703,21 @@ export default function PipelineClient({
           </div>
         </div>
       )}
+
+      {view === 'edit-lead' && editingLead && (() => {
+        const editOrg     = organizations.find(o => o.id === editingLead.organizacionId);
+        const editContact = contacts.find(c => c.id === editingLead.contactoId);
+        return (
+          <LeadEditView
+            lead={editingLead}
+            orgNombre={editOrg?.nombre ?? ''}
+            contactoNombre={editContact ? `${editContact.nombres} ${editContact.apellidos}` : '—'}
+            contactoEmail={editContact?.correo1}
+            onBack={() => { setEditingLead(null); setView('pipeline'); openSidebar(); }}
+            onLeadUpdate={handleLeadUpdate}
+          />
+        );
+      })()}
     </div>
   );
 }

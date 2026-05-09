@@ -1,14 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare, Sparkles, ArrowLeft } from 'lucide-react';
+import { useState, useTransition, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare, Sparkles, ArrowLeft, X } from 'lucide-react';
 import Link from 'next/link';
 import { getInitials, cn } from '@/src/lib/utils';
 import { VOCATIVOS } from '@/src/lib/constants';
 import type { Contact, Organization, Lead } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
-import Drawer from '@/src/components/ui/Drawer';
 import OrgTypeahead from '@/src/components/ui/OrgTypeahead';
 import { createContact } from '@/src/server/actions/contacts';
 import { useToast } from '@/src/components/ui/Toast';
@@ -25,11 +24,18 @@ export default function ContactsClient({
   leads,
 }: ContactsClientProps) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [, startTransition] = useTransition();
   const { showToast } = useToast();
   const [contactsList, setContactsList] = useState<Contact[]>(initialContacts);
   const orgsList = organizations;
-  const [view, setView] = useState<'list' | 'new'>('list');
+  const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
+  const [orgFilter, setOrgFilter] = useState<string | null>(null);
+
+  useEffect(() => {
+    const orgId = searchParams.get('orgId');
+    if (orgId) setOrgFilter(orgId);
+  }, [searchParams]);
   const [selectedContactId, setSelectedContactId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
@@ -141,7 +147,7 @@ export default function ContactsClient({
             <Sparkles className="w-4 h-4" />
           </Link>
           <button
-            onClick={() => setSelectedContactId(item.id)}
+            onClick={() => { setSelectedContactId(item.id); setView('detail'); }}
             title="Ver perfil"
             className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors"
           >
@@ -155,30 +161,50 @@ export default function ContactsClient({
   const selectedContact = contactsList.find(c => c.id === selectedContactId);
   const selectedOrg = organizations.find(o => o.id === selectedContact?.organizacionId);
   const contactLeads = leads.filter((l) => l.contactoId === selectedContactId);
+  const filterOrg = orgFilter ? organizations.find(o => o.id === orgFilter) : null;
+  const displayedContacts = orgFilter
+    ? contactsList.filter(c => c.organizacionId === orgFilter)
+    : contactsList;
 
   return (
     <div className="space-y-6">
-      {/* Tabs */}
-      <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
-        <button
-          onClick={() => { setView('list'); setForm({ vocativo: '', nombres: '', apellidos: '', correo1: '', correo2: '', cargo: '', telefono: '', comentarios: '', organizacionId: '' }); }}
-          className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all', view === 'list' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
-        >
-          Contactos
-        </button>
-        <button
-          onClick={() => setView('new')}
-          className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5', view === 'new' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
-        >
-          <Plus className="w-3.5 h-3.5" /> Nuevo Contacto
-        </button>
-      </div>
+      {/* Tabs — hidden in detail view */}
+      {view !== 'detail' && (
+        <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
+          <button
+            onClick={() => { setView('list'); setForm({ vocativo: '', nombres: '', apellidos: '', correo1: '', correo2: '', cargo: '', telefono: '', comentarios: '', organizacionId: '' }); }}
+            className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all', view === 'list' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
+          >
+            Contactos
+          </button>
+          <button
+            onClick={() => setView('new')}
+            className={cn('px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5', view === 'new' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text')}
+          >
+            <Plus className="w-3.5 h-3.5" /> Nuevo Contacto
+          </button>
+        </div>
+      )}
 
       {view === 'list' && (
         <>
-          <h1 className="text-2xl font-black text-text">Directorio de Contactos</h1>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-black text-text">Directorio de Contactos</h1>
+            {filterOrg && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-sm font-semibold text-primary">
+                <Building2 className="w-3.5 h-3.5" />
+                {filterOrg.nombre}
+                <button
+                  onClick={() => { setOrgFilter(null); router.replace('/contacts'); }}
+                  className="ml-1 hover:text-red-500 transition-colors"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
           <DataTable
-            data={contactsList}
+            data={displayedContacts}
             columns={columns}
             pageSize={10}
             searchPlaceholder="Buscar por nombre, email, cargo, organización..."
@@ -330,79 +356,96 @@ export default function ContactsClient({
         </div>
       )}
 
-      {/* Detail Drawer */}
-      <Drawer isOpen={!!selectedContactId} onClose={() => setSelectedContactId(null)} title="Perfil del Contacto">
-        {selectedContact && (
-          <div className="space-y-8">
-            <div className="bg-app-bg/40 p-6 rounded-2xl border border-border-subtle space-y-5">
-              <div className="flex items-center gap-4">
-                <div className="w-16 h-16 rounded-2xl bg-primary flex items-center justify-center text-white text-2xl font-black shadow-premium">
+      {/* ── Detail inline view ── */}
+      {view === 'detail' && selectedContact && (
+        <div className="animate-fade-in space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <button
+                onClick={() => { setView('list'); setSelectedContactId(null); }}
+                className="btn-secondary flex items-center gap-2"
+              >
+                <ArrowLeft className="w-4 h-4" /> Volver a Contactos
+              </button>
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary flex items-center justify-center text-white font-black shadow-sm">
                   {getInitials(`${selectedContact.nombres} ${selectedContact.apellidos}`)}
                 </div>
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-text">{selectedContact.vocativo ? `${selectedContact.vocativo} ` : ''}{selectedContact.nombres} {selectedContact.apellidos}</h3>
+                <div>
+                  <h1 className="text-2xl font-black text-text">
+                    {selectedContact.vocativo ? `${selectedContact.vocativo} ` : ''}{selectedContact.nombres} {selectedContact.apellidos}
+                  </h1>
                   <p className="text-sm font-bold text-primary uppercase tracking-widest">{selectedContact.cargo}</p>
                 </div>
-                <Link
-                  href={`/pipeline?prefillContact=${encodeURIComponent(selectedContact.id)}`}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all"
-                  title="Crear un lead vinculado a este contacto"
-                >
-                  <Sparkles className="w-3.5 h-3.5" />
-                  Convertir en lead
-                </Link>
               </div>
+            </div>
+            <Link
+              href={`/pipeline?prefillContact=${encodeURIComponent(selectedContact.id)}`}
+              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all"
+            >
+              <Sparkles className="w-4 h-4" />
+              Convertir en lead
+            </Link>
+          </div>
 
-              <div className="grid grid-cols-1 gap-3 pt-4 border-t border-border-subtle">
+          <div className="grid grid-cols-3 gap-6">
+            {/* Left — contact data */}
+            <div className="col-span-1 space-y-4">
+              <div className="bg-surface rounded-2xl border border-border-subtle p-5 space-y-4">
+                <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Datos de contacto</p>
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-border-subtle">
+                  <div className="w-8 h-8 rounded-lg bg-app-bg flex items-center justify-center border border-border-subtle shrink-0">
                     <Building2 className="w-4 h-4 text-primary" />
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-text-muted uppercase">Organización</p>
-                    <p className="text-sm font-bold text-text">{selectedOrg?.nombre || '—'}</p>
+                    <p className="text-sm font-semibold text-text">{selectedOrg?.nombre || '—'}</p>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-border-subtle">
+                  <div className="w-8 h-8 rounded-lg bg-app-bg flex items-center justify-center border border-border-subtle shrink-0">
                     <Mail className="w-4 h-4 text-primary" />
                   </div>
                   <div>
-                    <p className="text-[10px] font-bold text-text-muted uppercase">Correo Electrónico</p>
-                    <p className="text-sm font-bold text-text">{selectedContact.correo1}</p>
+                    <p className="text-[10px] font-bold text-text-muted uppercase">Correo principal</p>
+                    <p className="text-sm font-semibold text-text">{selectedContact.correo1}</p>
                   </div>
                 </div>
+                {selectedContact.correo2 && (
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 rounded-lg bg-app-bg flex items-center justify-center border border-border-subtle shrink-0">
+                      <Mail className="w-4 h-4 text-primary" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-text-muted uppercase">Correo 2</p>
+                      <p className="text-sm font-semibold text-text">{selectedContact.correo2}</p>
+                    </div>
+                  </div>
+                )}
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-border-subtle">
+                  <div className="w-8 h-8 rounded-lg bg-app-bg flex items-center justify-center border border-border-subtle shrink-0">
                     <Phone className="w-4 h-4 text-primary" />
                   </div>
                   <div>
                     <p className="text-[10px] font-bold text-text-muted uppercase">Teléfono</p>
-                    <p className="text-sm font-bold text-text">{selectedContact.telefono || '—'}</p>
+                    <p className="text-sm font-semibold text-text">{selectedContact.telefono || '—'}</p>
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-surface flex items-center justify-center border border-border-subtle">
-                    <Mail className="w-4 h-4 text-primary" />
+                {selectedContact.comentarios && (
+                  <div className="pt-3 border-t border-border-subtle">
+                    <p className="text-[10px] font-bold text-text-muted uppercase">Comentarios</p>
+                    <p className="text-sm text-text mt-1">{selectedContact.comentarios}</p>
                   </div>
-                  <div>
-                    <p className="text-[10px] font-bold text-text-muted uppercase">Correo 2</p>
-                    <p className="text-sm font-bold text-text">{selectedContact.correo2 || '—'}</p>
-                  </div>
-                </div>
+                )}
               </div>
-
-              {selectedContact.comentarios && (
-                <div className="bg-surface p-4 rounded-2xl border border-border-subtle">
-                  <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Comentarios</p>
-                  <p className="text-sm text-text mt-2">{selectedContact.comentarios}</p>
-                </div>
-              )}
             </div>
 
-            <div className="space-y-4">
+            {/* Right — leads */}
+            <div className="col-span-2 space-y-3">
               <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-primary" /> Leads en los que participa
+                <MessageSquare className="w-4 h-4 text-primary" /> Leads asociados
+                <span className="text-xs font-normal text-text-muted normal-case">({contactLeads.length})</span>
               </h4>
               {contactLeads.length === 0 ? (
                 <p className="text-sm text-text-muted italic">Sin leads asociados.</p>
@@ -423,8 +466,8 @@ export default function ContactsClient({
               )}
             </div>
           </div>
-        )}
-      </Drawer>
+        </div>
+      )}
     </div>
   );
 }

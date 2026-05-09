@@ -3,11 +3,12 @@
 import { useState, useRef, useEffect, useMemo } from 'react';
 import {
   Search, Plus, Bell, Building2, Users, Kanban,
-  AlertTriangle, Clock, CalendarDays, X, ChevronRight,
+  AlertTriangle, Clock, CalendarDays, X, ChevronRight, Menu,
 } from 'lucide-react';
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
+import { useSidebarStore } from '@/src/store/sidebarStore';
 import { getInitials, cn, relativeTime } from '@/src/lib/utils';
 import { useGlobalSearch } from '@/src/hooks/useGlobalSearch';
 import { mockLeads, mockOrganizations } from '@/src/lib/mockData';
@@ -19,6 +20,7 @@ import { listNotifications, getUnreadCount, markNotificationAsRead } from '@/src
 
 export default function TopBar() {
   const { userName, userEmail, role } = useAuthStore();
+  const toggleSidebar = useSidebarStore((s) => s.toggle);
   const router   = useRouter();
   const pathname = usePathname();
   const displayName = userName || userEmail || 'Usuario';
@@ -103,7 +105,16 @@ export default function TopBar() {
   };
 
   return (
-    <header className="h-16 flex items-center justify-between px-6 bg-surface border-b border-border-subtle sticky top-0 z-20">
+    <header className="h-16 flex items-center gap-3 px-6 bg-surface border-b border-border-subtle sticky top-0 z-20">
+
+      {/* ── Hamburger ── */}
+      <button
+        onClick={toggleSidebar}
+        className="w-9 h-9 flex items-center justify-center rounded-xl text-text-muted hover:text-primary hover:bg-app-bg transition-colors shrink-0"
+        aria-label="Toggle sidebar"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
 
       {/* ── Left: Global Search (hidden on dashboard) ── */}
       {showSearch ? (

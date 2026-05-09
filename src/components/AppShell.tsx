@@ -4,15 +4,18 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { usePathname } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
+import { useSidebarStore } from '@/src/store/sidebarStore';
 import Sidebar from '@/src/components/Sidebar';
 import LoginPage from '@/src/components/LoginPage';
 import TopBar from '@/src/components/TopBar';
 import { getMsalInstance } from '@/src/lib/msalConfig';
 import { useToast } from '@/src/components/ui/Toast';
 import { useKeepAlive } from '@/src/hooks/useKeepAlive';
+import { cn } from '@/src/lib/utils';
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const { isAuthenticated, userEmail, setMsToken, setMsAccountUsername } = useAuthStore();
+  const sidebarOpen = useSidebarStore((s) => s.isOpen);
   const { showToast } = useToast();
   // Mantiene la DB de Neon despierta con un ping cada 4 min mientras
   // el usuario tenga la app abierta. Evita el "DB durmió" durante demos.
@@ -76,7 +79,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="flex min-h-screen bg-app-bg font-sans">
-      <Sidebar />
+      <div
+        className={cn(
+          'shrink-0 overflow-hidden transition-[width] duration-300 ease-in-out',
+          sidebarOpen ? 'w-64' : 'w-0',
+        )}
+      >
+        <Sidebar />
+      </div>
       <div className="flex-1 flex flex-col min-w-0">
         <TopBar />
         <main className="flex-1 p-6 overflow-x-hidden animate-fade-in">

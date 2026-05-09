@@ -2,11 +2,11 @@
 
 import { useState, useMemo, useRef, useEffect, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { Plus, Search, Users, Kanban, FileText, ExternalLink, ArrowLeft } from 'lucide-react';
 import { TIPOS_ORG, TAMANOS_ORG, SECTORES } from '@/src/lib/constants';
 import type { Organization, Contact, Lead, Quote } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
-import Drawer from '@/src/components/ui/Drawer';
 import SunatInput, { type SunatData } from '@/src/components/ui/SunatInput';
 import ValidadorSunat from '@/src/components/ui/ValidadorSunat';
 import { cn, formatCurrency, formatDate } from '@/src/lib/utils';
@@ -45,7 +45,7 @@ export default function OrganizationsClient({
   const [, startTransition] = useTransition();
   const { showToast } = useToast();
   const [orgs, setOrgs] = useState<Organization[]>(initialOrgs);
-  const [view, setView] = useState<'list' | 'new'>('list');
+  const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
   const [showValidador, setShowValidador] = useState(false);
   const [selectedOrgId, setSelectedOrgId] = useState<string | null>(null);
   const [isFlashActive, setIsFlashActive] = useState(false);
@@ -240,7 +240,7 @@ export default function OrganizationsClient({
       header: 'Acciones',
       render: (item: Organization) => (
         <button
-          onClick={() => setSelectedOrgId(item.id)}
+          onClick={() => { setSelectedOrgId(item.id); setView('detail'); }}
           className="p-1.5 rounded-lg hover:bg-app-bg text-text-muted hover:text-primary transition-colors"
         >
           <ExternalLink className="w-4 h-4" />
@@ -256,38 +256,40 @@ export default function OrganizationsClient({
 
   return (
     <div className="space-y-6">
-      {/* Tabs */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
-          <button
-            onClick={() => { setView('list'); setForm(emptyForm); }}
-            className={cn(
-              'px-5 py-2 rounded-lg text-sm font-bold transition-all',
-              view === 'list' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text',
-            )}
-          >
-            Organizaciones
-          </button>
-          <button
-            onClick={() => setView('new')}
-            className={cn(
-              'px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5',
-              view === 'new' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text',
-            )}
-          >
-            <Plus className="w-3.5 h-3.5" /> Nueva Organización
-          </button>
+      {/* Tabs — hidden in detail view */}
+      {view !== 'detail' && (
+        <div className="flex items-center justify-between">
+          <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
+            <button
+              onClick={() => { setView('list'); setForm(emptyForm); }}
+              className={cn(
+                'px-5 py-2 rounded-lg text-sm font-bold transition-all',
+                view === 'list' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text',
+              )}
+            >
+              Organizaciones
+            </button>
+            <button
+              onClick={() => setView('new')}
+              className={cn(
+                'px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-1.5',
+                view === 'new' ? 'bg-surface text-primary shadow-sm' : 'text-text-muted hover:text-text',
+              )}
+            >
+              <Plus className="w-3.5 h-3.5" /> Nueva Organización
+            </button>
+          </div>
+          {view === 'list' && (
+            <button
+              onClick={() => setShowValidador(true)}
+              className="btn-secondary flex items-center gap-2"
+            >
+              <Search className="w-4 h-4" />
+              Validador SUNAT
+            </button>
+          )}
         </div>
-        {view === 'list' && (
-          <button
-            onClick={() => setShowValidador(true)}
-            className="btn-secondary flex items-center gap-2"
-          >
-            <Search className="w-4 h-4" />
-            Validador SUNAT
-          </button>
-        )}
-      </div>
+      )}
 
       {view === 'list' && (
         <>
@@ -597,192 +599,237 @@ export default function OrganizationsClient({
         </div>
       )}
 
-      {/* ── Detail Drawer ── */}
-      <Drawer
-        isOpen={!!selectedOrgId}
-        onClose={() => setSelectedOrgId(null)}
-        title="Detalles de Organización"
-      >
-        {selectedOrg && (
-          <div className="space-y-8">
-            {/* Identity card */}
-            <div className="bg-app-bg/40 p-6 rounded-2xl border border-border-subtle space-y-4">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-white text-2xl font-black shadow-premium">
+      {/* ── Detail inline view ── */}
+      {view === 'detail' && selectedOrg && (
+        <div className="animate-fade-in space-y-8">
+          {/* Header */}
+          <div className="space-y-4">
+            <button
+              onClick={() => { setView('list'); setSelectedOrgId(null); }}
+              className="btn-secondary flex items-center gap-2 w-fit"
+            >
+              <ArrowLeft className="w-4 h-4" /> Volver a Organizaciones
+            </button>
+            <div className="bg-surface rounded-2xl border border-border-subtle p-6">
+              <div className="flex items-start gap-4">
+                <div className="w-14 h-14 rounded-2xl bg-primary flex items-center justify-center text-white text-2xl font-black shadow-sm shrink-0">
                   {selectedOrg.nombre[0]}
                 </div>
-                <div>
-                  <h3 className="text-lg font-bold text-text">{selectedOrg.nombre}</h3>
-                  {selectedOrg.area && (
-                    <p className="text-xs text-text-muted">{selectedOrg.area}</p>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-2xl font-black text-text">{selectedOrg.nombre}</h1>
+                  {selectedOrg.nombreCompleto && (
+                    <p className="text-sm text-text-muted mt-0.5">{selectedOrg.nombreCompleto}</p>
                   )}
-                  <p className="text-xs font-bold text-primary uppercase tracking-widest mt-0.5">
-                    {selectedOrg.ruc ?? 'Sin RUC'}
-                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    {selectedOrg.ruc && (
+                      <span className="px-2.5 py-1 bg-app-bg border border-border-subtle rounded-lg text-xs font-mono text-text-muted">
+                        RUC {selectedOrg.ruc}
+                      </span>
+                    )}
+                    {selectedOrg.tipo && (
+                      <span className="px-2.5 py-1 bg-app-bg border border-border-subtle rounded-lg text-xs font-semibold text-text">
+                        {selectedOrg.tipo}
+                      </span>
+                    )}
+                    {selectedOrg.tamano && (
+                      <span className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-xs font-bold text-primary">
+                        {selectedOrg.tamano}
+                      </span>
+                    )}
+                    {selectedOrg.sector && (
+                      <span className="px-2.5 py-1 bg-app-bg border border-border-subtle rounded-lg text-xs font-semibold text-text">
+                        {selectedOrg.sector}
+                      </span>
+                    )}
+                    {selectedOrg.ubicacion && (
+                      <span className="px-2.5 py-1 bg-app-bg border border-border-subtle rounded-lg text-xs font-semibold text-text-muted">
+                        {selectedOrg.ubicacion}
+                      </span>
+                    )}
+                    {selectedOrg.alianzas?.length ? (
+                      <span className="px-2.5 py-1 bg-app-bg border border-border-subtle rounded-lg text-xs font-semibold text-text-muted">
+                        Alianzas: {selectedOrg.alianzas.join(', ')}
+                      </span>
+                    ) : null}
+                    {selectedOrg.linkedin && (
+                      <a
+                        href={selectedOrg.linkedin}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-blue-600 hover:bg-blue-100 transition-colors"
+                      >
+                        LinkedIn →
+                      </a>
+                    )}
+                  </div>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4 pt-2 border-t border-border-subtle">
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">Sector</p>
-                  <p className="text-sm font-bold text-text">{selectedOrg.sector || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">Tamaño</p>
-                  <p className="text-sm font-bold text-text">{selectedOrg.tamano || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">Tipo</p>
-                  <p className="text-sm font-bold text-text">{selectedOrg.tipo || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">Ubicación</p>
-                  <p className="text-sm font-bold text-text">{selectedOrg.ubicacion || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">Nombre comercial</p>
-                  <p className="text-sm font-bold text-text">{selectedOrg.nombreCompleto || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">LinkedIn</p>
-                  <p className="text-sm font-bold text-text">{selectedOrg.linkedin || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">Alianzas</p>
-                  <p className="text-sm font-bold text-text">
-                    {selectedOrg.alianzas?.length ? selectedOrg.alianzas.join(', ') : '—'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-[10px] font-bold text-text-muted uppercase">Contacto vigente</p>
-                  <p className="text-sm font-bold text-text">
-                    {selectedOrg.contactoVigente ? 'Activo' : 'Buscar nuevo contacto'}
-                  </p>
-                </div>
-              </div>
-            </div>
-
-            {/* Contacts */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
-                <Users className="w-4 h-4 text-primary" /> Contactos Asociados
-              </h4>
-              {orgContacts.length === 0 ? (
-                <p className="text-sm text-text-muted italic">Sin contactos registrados.</p>
-              ) : (
-                <div className="space-y-2">
-                  {orgContacts.map((c) => (
-                    <div key={c.id} className="p-4 bg-surface border border-border-subtle rounded-xl flex items-center justify-between group hover:border-primary transition-all">
-                      <div>
-                        <p className="text-sm font-bold text-text group-hover:text-primary transition-colors">
-                          {c.vocativo ? `${c.vocativo} ` : ''}{c.nombres} {c.apellidos}
-                        </p>
-                        <p className="text-xs text-text-muted">{c.cargo}</p>
-                      </div>
-                      <span className="text-[10px] font-bold text-text-muted bg-app-bg px-2 py-1 rounded-lg">{c.telefono || c.correo1}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* Leads */}
-            <div className="space-y-4">
-              <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
-                <Kanban className="w-4 h-4 text-primary" /> Historial de Leads
-              </h4>
-              {orgLeads.length === 0 ? (
-                <p className="text-sm text-text-muted italic">Sin leads registrados.</p>
-              ) : (
-                <div className="space-y-2">
-                  {orgLeads.map((l) => (
-                    <div key={l.id} className="p-4 bg-app-bg/30 border border-border-subtle rounded-xl flex items-center justify-between">
-                      <div>
-                        <p className="text-sm font-bold text-text">{l.servicioInteres || l.id}</p>
-                        <p className="text-xs text-primary font-bold uppercase">{l.estado}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-[10px] font-bold text-text-muted">{new Date(l.creadoEn).toLocaleDateString('es-PE')}</p>
-                        <p className="text-xs font-bold text-text">{l.encargado}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <div className="space-y-4">
-              <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
-                <FileText className="w-4 h-4 text-primary" /> Historial de Cotizaciones
-              </h4>
-              {orgQuotes.length === 0 ? (
-                <p className="text-sm text-text-muted italic">Sin cotizaciones registradas.</p>
-              ) : (
-                <div className="space-y-2">
-                  {orgQuotes.map((quote) => {
-                    const lead = orgLeads.find((item) => item.id === quote.leadId);
-                    const statusClass = {
-                      aceptada: 'bg-green-100 text-green-700',
-                      enviada: 'bg-blue-100 text-blue-700',
-                      rechazada: 'bg-red-100 text-red-700',
-                      pendiente: 'bg-amber-100 text-amber-700',
-                    }[quote.estado];
-
-                    return (
-                      <div key={quote.id} className="p-4 bg-surface border border-border-subtle rounded-xl space-y-3">
-                        <div className="flex items-start justify-between gap-4">
-                          <div>
-                            <p className="text-sm font-bold text-text">{quote.servicio}</p>
-                            <p className="text-[10px] font-mono text-text-muted mt-1">{quote.id} · Lead {quote.leadId}</p>
-                          </div>
-                          <span className={cn('px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider', statusClass)}>
-                            {quote.estado}
-                          </span>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                          <div>
-                            <p className="text-[10px] font-bold text-text-muted uppercase">Monto</p>
-                            <p className="text-sm font-bold text-text">{formatCurrency(quote.monto, quote.moneda)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-text-muted uppercase">Fecha</p>
-                            <p className="text-sm font-bold text-text">{formatDate(quote.fechaCotizacion)}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-text-muted uppercase">Dirigido a</p>
-                            <p className="text-sm text-text">{quote.dirigidoA}</p>
-                          </div>
-                          <div>
-                            <p className="text-[10px] font-bold text-text-muted uppercase">Remitente</p>
-                            <p className="text-sm text-text">{quote.remitente}</p>
-                          </div>
-                        </div>
-
-                        {(lead?.servicioInteres || quote.observacion) && (
-                          <div className="pt-3 border-t border-border-subtle space-y-2">
-                            {lead?.servicioInteres && (
-                              <div>
-                                <p className="text-[10px] font-bold text-text-muted uppercase">Oportunidad asociada</p>
-                                <p className="text-sm text-text">{lead.servicioInteres}</p>
-                              </div>
-                            )}
-                            {quote.observacion && (
-                              <div>
-                                <p className="text-[10px] font-bold text-text-muted uppercase">Observación</p>
-                                <p className="text-sm text-text">{quote.observacion}</p>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
             </div>
           </div>
-        )}
-      </Drawer>
+
+          {/* Contacts */}
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
+                <Users className="w-4 h-4 text-primary" /> Contactos asociados
+                <span className="text-xs font-normal text-text-muted normal-case">({orgContacts.length})</span>
+              </h4>
+              {orgContacts.length > 6 && (
+                <Link
+                  href={`/contacts?orgId=${selectedOrg.id}`}
+                  className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
+                >
+                  Ver todos ({orgContacts.length}) en Contactos →
+                </Link>
+              )}
+            </div>
+            {orgContacts.length === 0 ? (
+              <p className="text-sm text-text-muted italic">Sin contactos registrados.</p>
+            ) : (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  {orgContacts.slice(0, 6).map((c) => (
+                    <div key={c.id} className="p-4 bg-surface border border-border-subtle rounded-xl group hover:border-primary transition-all">
+                      <div className="flex items-center gap-2 mb-2">
+                        <div className="w-7 h-7 rounded-lg bg-primary/10 flex items-center justify-center text-primary text-[10px] font-black shrink-0">
+                          {c.nombres[0]}{c.apellidos[0]}
+                        </div>
+                        <p className="text-sm font-bold text-text group-hover:text-primary transition-colors truncate">
+                          {c.vocativo ? `${c.vocativo} ` : ''}{c.nombres} {c.apellidos}
+                        </p>
+                      </div>
+                      <p className="text-xs text-text-muted truncate">{c.cargo}</p>
+                      <p className="text-[10px] text-text-muted mt-1 truncate">{c.correo1}</p>
+                      {c.telefono && <p className="text-[10px] text-text-muted truncate">{c.telefono}</p>}
+                    </div>
+                  ))}
+                </div>
+                {orgContacts.length > 6 && (
+                  <Link
+                    href={`/contacts?orgId=${selectedOrg.id}`}
+                    className="flex items-center justify-center gap-2 w-full py-3 rounded-xl border border-dashed border-border-subtle text-sm font-semibold text-text-muted hover:text-primary hover:border-primary transition-all"
+                  >
+                    <Users className="w-4 h-4" />
+                    Ver los {orgContacts.length - 6} contactos restantes en la sección Contactos
+                  </Link>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Leads */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
+              <Kanban className="w-4 h-4 text-primary" /> Historial de leads
+              <span className="text-xs font-normal text-text-muted normal-case">({orgLeads.length})</span>
+            </h4>
+            {orgLeads.length === 0 ? (
+              <p className="text-sm text-text-muted italic">Sin leads registrados.</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3">
+                {orgLeads.map((l) => {
+                  const estadoColor: Record<string, string> = {
+                    nuevo: 'bg-gray-100 text-gray-600',
+                    en_proceso: 'bg-amber-100 text-amber-700',
+                    cerrado_ganado: 'bg-green-100 text-green-700',
+                    cerrado_perdido: 'bg-red-100 text-red-600',
+                  };
+                  const estadoLabel: Record<string, string> = {
+                    nuevo: 'En prospecto',
+                    en_proceso: 'Ofertado',
+                    cerrado_ganado: 'Cierre con venta',
+                    cerrado_perdido: 'Cierre sin venta',
+                  };
+                  return (
+                    <div key={l.id} className="p-4 bg-surface border border-border-subtle rounded-xl space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-bold text-text">{l.servicioInteres || l.id}</p>
+                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-bold uppercase shrink-0', estadoColor[l.estado] ?? 'bg-gray-100 text-gray-600')}>
+                          {estadoLabel[l.estado] ?? l.estado}
+                        </span>
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] text-text-muted">
+                        <span>{l.encargado}</span>
+                        <span>{new Date(l.creadoEn).toLocaleDateString('es-PE')}</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {/* Quotes */}
+          <div className="space-y-3">
+            <h4 className="text-sm font-bold text-text uppercase tracking-wider flex items-center gap-2">
+              <FileText className="w-4 h-4 text-primary" /> Historial de cotizaciones
+              <span className="text-xs font-normal text-text-muted normal-case">({orgQuotes.length})</span>
+            </h4>
+            {orgQuotes.length === 0 ? (
+              <p className="text-sm text-text-muted italic">Sin cotizaciones registradas.</p>
+            ) : (
+              <div className="space-y-3">
+                {orgQuotes.map((quote) => {
+                  const lead = orgLeads.find((item) => item.id === quote.leadId);
+                  const statusClass = {
+                    aceptada:  'bg-green-100 text-green-700',
+                    enviada:   'bg-blue-100 text-blue-700',
+                    rechazada: 'bg-red-100 text-red-700',
+                    pendiente: 'bg-amber-100 text-amber-700',
+                  }[quote.estado];
+                  return (
+                    <div key={quote.id} className="p-5 bg-surface border border-border-subtle rounded-2xl space-y-4">
+                      <div className="flex items-start justify-between gap-4">
+                        <div>
+                          <p className="text-base font-bold text-text">{quote.servicio}</p>
+                          <p className="text-[10px] font-mono text-text-muted mt-1">{quote.id} · Lead {quote.leadId}</p>
+                        </div>
+                        <span className={cn('px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider shrink-0', statusClass)}>
+                          {quote.estado}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-4 gap-4 pt-3 border-t border-border-subtle">
+                        <div>
+                          <p className="text-[10px] font-bold text-text-muted uppercase">Monto</p>
+                          <p className="text-sm font-bold text-text">{formatCurrency(quote.monto, quote.moneda)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-text-muted uppercase">Fecha</p>
+                          <p className="text-sm font-bold text-text">{formatDate(quote.fechaCotizacion)}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-text-muted uppercase">Dirigido a</p>
+                          <p className="text-sm text-text">{quote.dirigidoA}</p>
+                        </div>
+                        <div>
+                          <p className="text-[10px] font-bold text-text-muted uppercase">Remitente</p>
+                          <p className="text-sm text-text">{quote.remitente}</p>
+                        </div>
+                      </div>
+                      {(lead?.servicioInteres || quote.observacion) && (
+                        <div className="pt-3 border-t border-border-subtle grid grid-cols-2 gap-4">
+                          {lead?.servicioInteres && (
+                            <div>
+                              <p className="text-[10px] font-bold text-text-muted uppercase">Oportunidad asociada</p>
+                              <p className="text-sm text-text">{lead.servicioInteres}</p>
+                            </div>
+                          )}
+                          {quote.observacion && (
+                            <div>
+                              <p className="text-[10px] font-bold text-text-muted uppercase">Observación</p>
+                              <p className="text-sm text-text">{quote.observacion}</p>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
