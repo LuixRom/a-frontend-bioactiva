@@ -13,6 +13,7 @@ import {
   Upload,
   FileText,
   UserCog,
+  LayoutTemplate,
 } from 'lucide-react';
 import { cn } from '@/src/lib/utils';
 
@@ -30,6 +31,7 @@ const baseMenuItems: NavItem[] = [
   { href: '/quotes',         label: 'Cotizaciones',   icon: FileText },
   { href: '/bulk-upload',    label: 'Importar / Exportar', icon: Upload },
   { href: '/notifications',  label: 'Notificaciones', icon: Bell },
+  { href: '/templates',      label: 'Plantillas',      icon: LayoutTemplate },
 ];
 
 export default function Sidebar() {
@@ -78,7 +80,7 @@ export default function Sidebar() {
               )}
             >
               <Icon className={cn(
-                'w-5 h-5 flex-shrink-0 transition-colors',
+                'w-5 h-5 shrink-0 transition-colors',
                 isActive ? 'text-primary' : 'text-text-muted group-hover:text-primary'
               )} />
               <span className="flex-1">{item.label}</span>
