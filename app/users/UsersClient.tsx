@@ -13,8 +13,8 @@ import {
   updateUser,
   updateUserPassword,
   deleteUser,
-  type PublicUser,
 } from '@/src/server/actions/users';
+import type { PublicUser } from '@/src/server/types';
 
 import { listInvitations, inviteUser, type UserInvitationPublic } from '@/src/server/actions/invitations';
 import InvitationsList from './InvitationsList';
