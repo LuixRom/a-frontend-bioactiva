@@ -16,8 +16,14 @@ export interface LeadNotification {
   fechaProgramada: Date;
   emailResponsable: string;
   nombreResponsable: string;
-  /** Solo para seguimiento */
+  /** Solo para seguimiento — primer correo (al responsable) */
   emailCliente?: string;
+  /** Solo para seguimiento — segundo correo (al cliente) */
+  templateClienteId?: string;
+  templateClienteNombre?: string;
+  asuntoClienteResuelto?: string;
+  cuerpoClienteResuelto?: string;
+  fechaCliente?: Date;
   creadoPor: string;
   creadoEn: Date;
   /** 'programada' | 'cancelada' | 'enviada' — 'vencida' se computa en runtime solo para recordatorios */

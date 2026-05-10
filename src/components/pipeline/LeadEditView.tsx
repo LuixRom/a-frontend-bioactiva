@@ -40,6 +40,7 @@ interface LeadEditViewProps {
   orgNombre: string;
   contactoNombre: string;
   contactoEmail?: string;
+  contactoEmail2?: string;
   onBack: () => void;
   onLeadUpdate: (updated: Lead) => void;
 }
@@ -49,6 +50,7 @@ export default function LeadEditView({
   orgNombre,
   contactoNombre,
   contactoEmail,
+  contactoEmail2,
   onBack,
   onLeadUpdate,
 }: LeadEditViewProps) {
@@ -72,16 +74,27 @@ export default function LeadEditView({
     fechaFin: new Date().toISOString().slice(0, 10),
   });
 
-  const { notifications: leadNotifs, create: createNotif, cancel: cancelNotif, markAsSent, hasActiveForActivity } = useLeadNotificationStore();
+  const { notifications: leadNotifs, create: createNotif, cancel: cancelNotif, hasActiveForActivity } = useLeadNotificationStore();
   const { templates: emailTemplates } = useEmailTemplateStore();
 
-  const [notifForm, setNotifForm] = useState({
+  const mkDefaultNotifForm = () => ({
     activityId: '',
     tipo: 'recordatorio' as 'recordatorio' | 'seguimiento',
+    // Correo al responsable (recordatorio: único; seguimiento: correo interno)
     templateId: '',
+    asuntoEditado: '',
+    cuerpoEditado: '',
     fechaProgramada: new Date().toISOString().slice(0, 10),
     horaProgramada: '09:00',
+    // Solo seguimiento — correo externo al cliente
+    templateClienteId: '',
+    asuntoClienteEditado: '',
+    cuerpoClienteEditado: '',
+    fechaCliente: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+    horaCliente: '09:00',
+    emailClienteSeleccionado: contactoEmail ?? '',
   });
+  const [notifForm, setNotifForm] = useState(mkDefaultNotifForm);
   const [sendingNotif, setSendingNotif] = useState(false);
 
   // Solo recordatorios programados — enviadas y canceladas no aparecen aquí
@@ -112,72 +125,132 @@ export default function LeadEditView({
       .replace(/\{\{nombre_encargado\}\}/g, lead.encargado ?? '')
       .replace(/\{\{fecha_actividad\}\}/g, fecha ? new Date(fecha).toLocaleDateString('es-PE') : '');
 
-  const selectedTemplate = templatesForTipo.find(t => t.id === notifForm.templateId);
-  const previewAsunto = selectedTemplate ? resolveVars(selectedTemplate.asunto, notifForm.fechaProgramada) : '';
-  const previewCuerpo = selectedTemplate ? resolveVars(selectedTemplate.cuerpo, notifForm.fechaProgramada) : '';
+  const selectedTemplate = emailTemplates.find(t => t.id === notifForm.templateId);
+  const selectedTemplateCliente = emailTemplates.find(t => t.id === notifForm.templateClienteId);
+  // Los valores editables son la fuente de verdad para el envío
+  const previewAsunto = notifForm.asuntoEditado;
+  const previewCuerpo = notifForm.cuerpoEditado;
+  const leadLink = `\n\n—\nVer actividad en el CRM: http://localhost:3000/pipeline?leadId=${lead.id}`;
+
+  const handleTemplateChange = (templateId: string) => {
+    const tpl = emailTemplates.find(t => t.id === templateId);
+    if (!tpl) { setNotifForm(f => ({ ...f, templateId, asuntoEditado: '', cuerpoEditado: '' })); return; }
+    const cuerpoBase = resolveVars(tpl.cuerpo, notifForm.fechaProgramada);
+    setNotifForm(f => ({
+      ...f, templateId,
+      asuntoEditado: resolveVars(tpl.asunto, f.fechaProgramada),
+      cuerpoEditado: cuerpoBase + leadLink,
+    }));
+  };
+
+  const handleTemplateClienteChange = (templateId: string) => {
+    const tpl = emailTemplates.find(t => t.id === templateId);
+    if (!tpl) { setNotifForm(f => ({ ...f, templateClienteId: templateId, asuntoClienteEditado: '', cuerpoClienteEditado: '' })); return; }
+    setNotifForm(f => ({
+      ...f, templateClienteId: templateId,
+      asuntoClienteEditado: resolveVars(tpl.asunto, f.fechaCliente),
+      cuerpoClienteEditado: resolveVars(tpl.cuerpo, f.fechaCliente),
+    }));
+  };
+
+  const handleTipoChange = (tipo: 'recordatorio' | 'seguimiento') => {
+    setNotifForm(f => ({
+      ...f, tipo,
+      templateId: '', asuntoEditado: '', cuerpoEditado: '',
+      templateClienteId: '', asuntoClienteEditado: '', cuerpoClienteEditado: '',
+    }));
+  };
 
   const handleSendNotif = async () => {
     if (!notifForm.activityId) { showToast('Selecciona una actividad', 'error'); return; }
-    if (!selectedTemplate) { showToast('Selecciona una plantilla', 'error'); return; }
-    if (notifForm.tipo === 'recordatorio' && !notifForm.fechaProgramada) { showToast('Selecciona una fecha', 'error'); return; }
-    if (notifForm.tipo === 'seguimiento' && !contactoEmail) {
-      showToast('Este lead no tiene email de contacto registrado', 'error'); return;
+    if (!notifForm.templateId) { showToast('Selecciona una plantilla para el correo al responsable', 'error'); return; }
+    if (!notifForm.fechaProgramada) { showToast('Selecciona una fecha', 'error'); return; }
+
+    // Fecha recordatorio debe estar antes de fechaFin de la actividad
+    if (notifForm.tipo === 'recordatorio' && selectedActivity?.fechaFin) {
+      const fin = new Date(selectedActivity.fechaFin);
+      const prog = new Date(notifForm.fechaProgramada);
+      if (prog > fin) {
+        showToast('El recordatorio debe programarse antes de la fecha de fin de la actividad', 'error');
+        return;
+      }
+    }
+
+    // Validaciones específicas de seguimiento
+    if (notifForm.tipo === 'seguimiento') {
+      const emailCliente = notifForm.emailClienteSeleccionado || contactoEmail;
+      if (!emailCliente) { showToast('Este lead no tiene email de contacto registrado', 'error'); return; }
+      if (!notifForm.templateClienteId) { showToast('Selecciona una plantilla para el correo al cliente', 'error'); return; }
+      const fechaInterno = new Date(`${notifForm.fechaProgramada}T${notifForm.horaProgramada}`);
+      const fechaClienteDt = new Date(`${notifForm.fechaCliente}T${notifForm.horaCliente}`);
+      if (fechaClienteDt <= fechaInterno) {
+        showToast('El correo al cliente debe programarse después del correo interno al responsable', 'error');
+        return;
+      }
     }
 
     setSendingNotif(true);
     try {
-      if (notifForm.tipo === 'seguimiento') {
-        // Seguimiento: envío inmediato al responsable + cliente
-        const toResponsable = lead.encargadoEmail || process.env.GMAIL_USER || '';
-        const result = await sendEmail({ to: toResponsable, subject: previewAsunto, body: previewCuerpo });
-        if (!result.ok) throw new Error(result.error);
-        if (contactoEmail) {
-          await sendEmail({ to: contactoEmail, subject: previewAsunto, body: previewCuerpo });
-        }
-      }
-      // Recordatorio: se guarda en el sistema (el evento en Outlook se crea desde la pestaña Actividades)
+      const fechaConHora = (() => {
+        const d = new Date(notifForm.fechaProgramada);
+        const [hh, mm] = notifForm.horaProgramada.split(':').map(Number);
+        d.setHours(hh, mm, 0, 0);
+        return d;
+      })();
 
-      const fechaConHora = notifForm.tipo === 'seguimiento'
-        ? new Date()
-        : (() => {
-            const d = new Date(notifForm.fechaProgramada);
-            const [hh, mm] = notifForm.horaProgramada.split(':').map(Number);
+      const fechaClienteConHora = notifForm.tipo === 'seguimiento'
+        ? (() => {
+            const d = new Date(notifForm.fechaCliente);
+            const [hh, mm] = notifForm.horaCliente.split(':').map(Number);
             d.setHours(hh, mm, 0, 0);
             return d;
-          })();
+          })()
+        : undefined;
 
-      const newNotif = createNotif({
+      const emailClienteFinal = notifForm.tipo === 'seguimiento'
+        ? (notifForm.emailClienteSeleccionado || contactoEmail || '')
+        : undefined;
+
+      createNotif({
         leadId: lead.id,
         activityId: notifForm.activityId,
         activityNota: selectedActivity?.nota ?? '',
         orgNombre,
         contactoNombre,
         tipo: notifForm.tipo,
-        templateId: selectedTemplate.id,
-        templateNombre: selectedTemplate.nombre,
+        templateId: selectedTemplate!.id,
+        templateNombre: selectedTemplate!.nombre,
         asuntoResuelto: previewAsunto,
         cuerpoResuelto: previewCuerpo,
         fechaProgramada: fechaConHora,
         emailResponsable: lead.encargadoEmail ?? '',
         nombreResponsable: lead.encargado ?? '',
-        emailCliente: notifForm.tipo === 'seguimiento' ? contactoEmail : undefined,
+        emailCliente: emailClienteFinal,
         creadoPor: userName ?? '',
+        ...(notifForm.tipo === 'seguimiento' && {
+          templateClienteId: notifForm.templateClienteId,
+          templateClienteNombre: selectedTemplateCliente?.nombre,
+          asuntoClienteResuelto: notifForm.asuntoClienteEditado,
+          cuerpoClienteResuelto: notifForm.cuerpoClienteEditado,
+          fechaCliente: fechaClienteConHora,
+        }),
       });
 
-      // Seguimiento envía email inmediatamente → marcar como enviada
+      // Simulación mock — intenta enviar, no bloquea si falla
       if (notifForm.tipo === 'seguimiento') {
-        markAsSent(newNotif.id);
+        sendEmail({ to: lead.encargadoEmail || '', subject: previewAsunto, body: previewCuerpo })
+          .catch(() => {});
       }
 
       showToast(
         notifForm.tipo === 'seguimiento'
-          ? 'Seguimiento enviado al responsable y al cliente'
+          ? 'Seguimiento programado — los correos se enviarán en las fechas definidas'
           : 'Recordatorio guardado — aparecerá en tu Centro de Notificaciones',
         'success',
       );
-      setNotifForm({ activityId: '', tipo: 'recordatorio', templateId: '', fechaProgramada: new Date().toISOString().slice(0, 10), horaProgramada: '09:00' });
+      setNotifForm(mkDefaultNotifForm());
     } catch (err) {
-      showToast(err instanceof Error ? err.message : 'Error al enviar', 'error');
+      showToast(err instanceof Error ? err.message : 'Error al guardar', 'error');
     } finally {
       setSendingNotif(false);
     }
@@ -372,8 +445,26 @@ export default function LeadEditView({
 
       <div className="rounded-2xl border border-border-subtle bg-surface p-8 space-y-5">
         {/* ── Tab Detalle ── */}
-        {activeTab === 'detalle' && (
+        {activeTab === 'detalle' && (() => {
+          const lastAct = lead.actividades.length > 0
+            ? Math.max(...lead.actividades.map(a => new Date(a.fecha).getTime()))
+            : 0;
+          const refDate = lastAct > 0 ? lastAct : (lead.creadoEn ? new Date(lead.creadoEn).getTime() : Date.now());
+          const daysSince = Math.floor((Date.now() - refDate) / 86_400_000);
+          const showInactivity = daysSince >= 30 && !['cerrado_ganado', 'cerrado_perdido'].includes(lead.estado ?? '');
+          return (
           <>
+            {showInactivity && (
+              <div className="bg-amber-50 border border-amber-300 rounded-2xl p-4 flex items-start gap-3">
+                <span className="text-xl">⚠️</span>
+                <div>
+                  <p className="text-sm font-bold text-amber-800">Lead inactivo hace {daysSince} días</p>
+                  <p className="text-xs text-amber-700 mt-0.5">
+                    Este lead lleva más de 30 días sin cambio de estado. Se ha generado una alerta automática para el encargado.
+                  </p>
+                </div>
+              </div>
+            )}
             <div>
               <label className={labelClass}>Estado</label>
               <select value={merged.estado} onChange={e => setForm(f => ({ ...f, estado: e.target.value as Lead['estado'] }))} className={fieldClass}>
@@ -472,7 +563,8 @@ export default function LeadEditView({
               )}
             </div>
           </>
-        )}
+          );
+        })()}
 
         {/* ── Tab Actividades ── */}
         {activeTab === 'actividades' && (
@@ -743,7 +835,7 @@ export default function LeadEditView({
                     {(['recordatorio', 'seguimiento'] as const).map(t => (
                       <button
                         key={t}
-                        onClick={() => setNotifForm(f => ({ ...f, tipo: t }))}
+                        onClick={() => handleTipoChange(t)}
                         className={cn(
                           'flex-1 py-2.5 rounded-xl text-sm font-bold border transition-all',
                           notifForm.tipo === t ? 'bg-primary text-white border-primary' : 'border-border-subtle text-text-muted hover:border-primary hover:text-primary',
@@ -755,77 +847,244 @@ export default function LeadEditView({
                   </div>
                   <p className="text-[10px] text-text-muted mt-1">
                     {notifForm.tipo === 'recordatorio'
-                      ? 'Registra una alerta interna para esta actividad. Sin email al cliente.'
-                      : 'Envía un email inmediatamente al responsable y al cliente.'}
+                      ? 'Alerta interna programada para el responsable. Sin email al cliente.'
+                      : 'Programa dos correos: uno interno al responsable y uno externo al cliente.'}
                   </p>
                 </div>
 
-                {/* Plantilla */}
-                <div>
-                  <label className={labelClass}>Plantilla <span className="text-red-500">*</span></label>
-                  <select
-                    value={notifForm.templateId}
-                    onChange={e => setNotifForm(f => ({ ...f, templateId: e.target.value }))}
-                    className={fieldClass}
-                  >
-                    <option value="">Seleccionar plantilla...</option>
-                    {templatesForTipo.map(t => (
-                      <option key={t.id} value={t.id}>{t.nombre} ({t.categoria})</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Fecha y hora: solo para recordatorio (seguimiento se envía ahora) */}
+                {/* ═══ RECORDATORIO ═══ */}
                 {notifForm.tipo === 'recordatorio' && (
-                  <div className="grid grid-cols-2 gap-3">
+                  <>
                     <div>
-                      <label className={labelClass}>Fecha programada</label>
-                      <input
-                        type="date"
-                        value={notifForm.fechaProgramada}
-                        onChange={e => setNotifForm(f => ({ ...f, fechaProgramada: e.target.value }))}
+                      <label className={labelClass}>Plantilla <span className="text-red-500">*</span></label>
+                      <select
+                        value={notifForm.templateId}
+                        onChange={e => handleTemplateChange(e.target.value)}
                         className={fieldClass}
-                      />
+                      >
+                        <option value="">Seleccionar plantilla...</option>
+                        {templatesForTipo.map(t => (
+                          <option key={t.id} value={t.id}>{t.nombre} ({t.categoria})</option>
+                        ))}
+                      </select>
                     </div>
-                    <div>
-                      <label className={labelClass}>Hora</label>
-                      <input
-                        type="time"
-                        value={notifForm.horaProgramada}
-                        onChange={e => setNotifForm(f => ({ ...f, horaProgramada: e.target.value }))}
-                        className={fieldClass}
-                      />
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelClass}>Fecha programada</label>
+                        <input type="date" value={notifForm.fechaProgramada}
+                          onChange={e => setNotifForm(f => ({ ...f, fechaProgramada: e.target.value }))}
+                          className={fieldClass}
+                        />
+                        {selectedActivity?.fechaFin && (
+                          <p className="text-[10px] text-text-muted mt-1">
+                            Límite: {new Date(selectedActivity.fechaFin).toLocaleDateString('es-PE')}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <label className={labelClass}>Hora</label>
+                        <input type="time" value={notifForm.horaProgramada}
+                          onChange={e => setNotifForm(f => ({ ...f, horaProgramada: e.target.value }))}
+                          className={fieldClass}
+                        />
+                      </div>
                     </div>
-                  </div>
+
+                    {notifForm.templateId && (
+                      <div className="space-y-2">
+                        <div>
+                          <label className={labelClass}>Asunto del correo</label>
+                          <input type="text" value={notifForm.asuntoEditado}
+                            onChange={e => setNotifForm(f => ({ ...f, asuntoEditado: e.target.value }))}
+                            className={fieldClass}
+                            placeholder="Asunto del correo interno..."
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Cuerpo del correo</label>
+                          <textarea rows={5} value={notifForm.cuerpoEditado}
+                            onChange={e => setNotifForm(f => ({ ...f, cuerpoEditado: e.target.value }))}
+                            className={fieldClass}
+                          />
+                          <p className="text-[10px] text-text-muted mt-0.5">Puedes editar el contenido sin modificar la plantilla original.</p>
+                        </div>
+                      </div>
+                    )}
+                  </>
                 )}
 
-                {/* Preview */}
-                {selectedTemplate && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Vista previa</p>
-                    <div className="bg-surface border border-border-subtle rounded-xl p-4 space-y-2">
-                      <p className="text-xs font-bold text-text">{previewAsunto}</p>
-                      <pre className="text-xs text-text-muted whitespace-pre-wrap font-sans">{previewCuerpo}</pre>
-                    </div>
-                    {notifForm.tipo === 'seguimiento' && (
-                      <p className="text-[10px] text-text-muted">
-                        {contactoEmail
-                          ? `Se enviará a: ${lead.encargadoEmail || 'responsable'} y ${contactoEmail}`
-                          : 'Este contacto no tiene email — solo se enviará al responsable.'}
+                {/* ═══ SEGUIMIENTO ═══ */}
+                {notifForm.tipo === 'seguimiento' && (
+                  <div className="space-y-5">
+
+                    {/* Sección A: Correo al responsable */}
+                    <div className="border border-blue-200 rounded-2xl p-4 space-y-3 bg-blue-50/40">
+                      <p className="text-[10px] font-black text-blue-700 uppercase tracking-widest">
+                        📨 Correo interno — al responsable
                       </p>
-                    )}
+                      <p className="text-[10px] text-blue-600">
+                        Destinatario: <span className="font-bold">{lead.encargado ?? 'Responsable del lead'}</span>
+                        {lead.encargadoEmail && <span className="text-blue-500 ml-1">({lead.encargadoEmail})</span>}
+                      </p>
+
+                      <div>
+                        <label className={labelClass}>Plantilla <span className="text-red-500">*</span></label>
+                        <select
+                          value={notifForm.templateId}
+                          onChange={e => handleTemplateChange(e.target.value)}
+                          className={fieldClass}
+                        >
+                          <option value="">Seleccionar plantilla...</option>
+                          {emailTemplates.filter(t => t.estado === 'activa').map(t => (
+                            <option key={t.id} value={t.id}>{t.nombre} ({t.categoria})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelClass}>Fecha de envío</label>
+                          <input type="date" value={notifForm.fechaProgramada}
+                            onChange={e => setNotifForm(f => ({ ...f, fechaProgramada: e.target.value }))}
+                            className={fieldClass}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Hora</label>
+                          <input type="time" value={notifForm.horaProgramada}
+                            onChange={e => setNotifForm(f => ({ ...f, horaProgramada: e.target.value }))}
+                            className={fieldClass}
+                          />
+                        </div>
+                      </div>
+
+                      {notifForm.templateId && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className={labelClass}>Asunto</label>
+                            <input type="text" value={notifForm.asuntoEditado}
+                              onChange={e => setNotifForm(f => ({ ...f, asuntoEditado: e.target.value }))}
+                              className={fieldClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Cuerpo</label>
+                            <textarea rows={4} value={notifForm.cuerpoEditado}
+                              onChange={e => setNotifForm(f => ({ ...f, cuerpoEditado: e.target.value }))}
+                              className={fieldClass}
+                            />
+                            <p className="text-[10px] text-blue-600 mt-0.5">Incluye enlace al lead al final del cuerpo.</p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Sección B: Correo al cliente */}
+                    <div className="border border-purple-200 rounded-2xl p-4 space-y-3 bg-purple-50/40">
+                      <p className="text-[10px] font-black text-purple-700 uppercase tracking-widest">
+                        📤 Correo externo — al cliente
+                      </p>
+
+                      {/* Selector de email si tiene correo2 */}
+                      {contactoEmail && (
+                        <div>
+                          <label className={labelClass}>Email del cliente</label>
+                          {contactoEmail2 ? (
+                            <div className="flex gap-3">
+                              {[contactoEmail, contactoEmail2].map(em => (
+                                <label key={em} className={cn(
+                                  'flex-1 flex items-center gap-2 p-2.5 rounded-xl border cursor-pointer transition-all text-xs font-bold',
+                                  notifForm.emailClienteSeleccionado === em
+                                    ? 'bg-purple-100 border-purple-400 text-purple-800'
+                                    : 'border-border-subtle text-text-muted hover:border-purple-300',
+                                )}>
+                                  <input
+                                    type="radio"
+                                    name="emailCliente"
+                                    value={em}
+                                    checked={notifForm.emailClienteSeleccionado === em}
+                                    onChange={() => setNotifForm(f => ({ ...f, emailClienteSeleccionado: em }))}
+                                    className="accent-purple-600"
+                                  />
+                                  {em}
+                                </label>
+                              ))}
+                            </div>
+                          ) : (
+                            <p className="text-xs text-text-muted px-1">{contactoEmail}</p>
+                          )}
+                        </div>
+                      )}
+                      {!contactoEmail && (
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                          ⚠️ Este contacto no tiene email registrado. No se podrá enviar correo al cliente.
+                        </p>
+                      )}
+
+                      <div>
+                        <label className={labelClass}>Plantilla <span className="text-red-500">*</span></label>
+                        <select
+                          value={notifForm.templateClienteId}
+                          onChange={e => handleTemplateClienteChange(e.target.value)}
+                          className={fieldClass}
+                        >
+                          <option value="">Seleccionar plantilla...</option>
+                          {emailTemplates.filter(t => t.estado === 'activa').map(t => (
+                            <option key={t.id} value={t.id}>{t.nombre} ({t.categoria})</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className={labelClass}>Fecha de envío <span className="text-[10px] text-purple-600">(posterior al interno)</span></label>
+                          <input type="date" value={notifForm.fechaCliente}
+                            onChange={e => setNotifForm(f => ({ ...f, fechaCliente: e.target.value }))}
+                            className={fieldClass}
+                            min={notifForm.fechaProgramada}
+                          />
+                        </div>
+                        <div>
+                          <label className={labelClass}>Hora</label>
+                          <input type="time" value={notifForm.horaCliente}
+                            onChange={e => setNotifForm(f => ({ ...f, horaCliente: e.target.value }))}
+                            className={fieldClass}
+                          />
+                        </div>
+                      </div>
+
+                      {notifForm.templateClienteId && (
+                        <div className="space-y-2">
+                          <div>
+                            <label className={labelClass}>Asunto</label>
+                            <input type="text" value={notifForm.asuntoClienteEditado}
+                              onChange={e => setNotifForm(f => ({ ...f, asuntoClienteEditado: e.target.value }))}
+                              className={fieldClass}
+                            />
+                          </div>
+                          <div>
+                            <label className={labelClass}>Cuerpo</label>
+                            <textarea rows={4} value={notifForm.cuerpoClienteEditado}
+                              onChange={e => setNotifForm(f => ({ ...f, cuerpoClienteEditado: e.target.value }))}
+                              className={fieldClass}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 )}
 
                 <button
                   onClick={handleSendNotif}
-                  disabled={sendingNotif || !notifForm.templateId || !notifForm.activityId}
+                  disabled={sendingNotif || !notifForm.activityId}
                   className="btn-primary w-full disabled:opacity-40"
                 >
                   {sendingNotif
-                    ? <><Loader2 className="w-4 h-4 animate-spin" /> {notifForm.tipo === 'seguimiento' ? 'Enviando...' : 'Guardando...'}</>
+                    ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</>
                     : notifForm.tipo === 'seguimiento'
-                      ? <><Send className="w-4 h-4" /> Enviar seguimiento al cliente</>
+                      ? <><Send className="w-4 h-4" /> Programar seguimiento</>
                       : <><Bell className="w-4 h-4" /> Guardar recordatorio</>
                   }
                 </button>
@@ -834,9 +1093,14 @@ export default function LeadEditView({
 
             {/* Todas las actividades ya tienen notificación */}
             {lead.actividades.length > 0 && availableActivities.length === 0 && (
-              <div className="text-center py-6 bg-green-50 rounded-2xl border border-green-200">
-                <p className="text-sm font-bold text-green-700">Todas las actividades tienen notificación activa.</p>
-                <p className="text-xs text-green-600 mt-1">Cancela una para poder crear otra en esa actividad.</p>
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
+                <p className="text-sm font-bold text-amber-800">Sin actividades disponibles para nueva notificación</p>
+                <p className="text-xs text-amber-700">
+                  Si desea registrar una nueva notificación, debe eliminar la que está asociada actualmente.
+                </p>
+                <p className="text-[10px] text-amber-600">
+                  Puede cancelar una notificación desde la lista de arriba o desde el Centro de Notificaciones.
+                </p>
               </div>
             )}
 

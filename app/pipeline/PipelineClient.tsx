@@ -729,6 +729,7 @@ export default function PipelineClient({
             orgNombre={editOrg?.nombre ?? ''}
             contactoNombre={editContact ? `${editContact.nombres} ${editContact.apellidos}` : '—'}
             contactoEmail={editContact?.correo1}
+            contactoEmail2={editContact?.correo2}
             onBack={() => { setEditingLead(null); setView('pipeline'); openSidebar(); }}
             onLeadUpdate={handleLeadUpdate}
           />
