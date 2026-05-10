@@ -4,12 +4,12 @@ import PipelineClient from './PipelineClient';
 export const dynamic = 'force-dynamic';
 
 interface PipelinePageProps {
-  searchParams: Promise<{ prefillContact?: string }>;
+  searchParams: Promise<{ prefillContact?: string; leadId?: string }>;
 }
 
 export default async function PipelinePage({ searchParams }: PipelinePageProps) {
-  const { prefillContact } = await searchParams;
-  
+  const { prefillContact, leadId } = await searchParams;
+
   let prefill: { organizacionCodigo?: string; contactoCodigo?: string } | null = null;
   if (prefillContact) {
     const c = mockContacts.find(c => c.id === prefillContact);
@@ -27,6 +27,7 @@ export default async function PipelinePage({ searchParams }: PipelinePageProps) 
       organizations={mockOrganizations}
       contacts={mockContacts}
       prefill={prefill}
+      defaultLeadId={leadId}
     />
   );
 }

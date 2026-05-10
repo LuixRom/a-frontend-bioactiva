@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import type { EmailTemplate, CategoriaPlantilla, EstadoPlantilla } from '@/src/types/emailTemplate';
+import { persist } from 'zustand/middleware';
+import type { EmailTemplate, CategoriaPlantilla, EstadoPlantilla, UsoPlantilla } from '@/src/types/emailTemplate';
 
 const initialTemplates: EmailTemplate[] = [
   {
@@ -17,6 +18,7 @@ Le pedimos presentarse con 5 minutos de anticipación. Cualquier consulta, comun
 Saludos cordiales,
 Equipo BioActiva`,
     categoria: 'reunion',
+    uso: 'seguimiento',
     estado: 'activa',
     creadoPor: 'Karien Diaz',
     creadoEn: new Date('2025-01-15'),
@@ -42,6 +44,7 @@ Atentamente,
 {{nombre_encargado}}
 BioActiva`,
     categoria: 'llamada',
+    uso: 'seguimiento',
     estado: 'activa',
     creadoPor: 'Karien Diaz',
     creadoEn: new Date('2025-01-20'),
@@ -67,6 +70,7 @@ Cordialmente,
 {{nombre_encargado}}
 BioActiva`,
     categoria: 'email',
+    uso: 'seguimiento',
     estado: 'activa',
     creadoPor: 'Administración',
     creadoEn: new Date('2025-02-01'),
@@ -77,16 +81,14 @@ BioActiva`,
     id: 'TPL-004',
     nombre: 'Recordatorio de actividad próxima',
     asunto: 'Recordatorio: {{servicio_interes}} — actividad el {{fecha_actividad}}',
-    cuerpo: `Estimado/a {{nombre_contacto}},
+    cuerpo: `Tienes programada una actividad el {{fecha_actividad}} con {{nombre_organizacion}}.
 
-Le recordamos que el {{fecha_actividad}} tenemos programada una actividad en el marco del proyecto {{servicio_interes}}.
+Proyecto: {{servicio_interes}}
+Responsable: {{nombre_encargado}}
 
-Por favor confirmar su disponibilidad respondiendo este correo.
-
-Gracias,
-{{nombre_encargado}}
-BioActiva`,
+Recuerda revisar los acuerdos previos antes de la actividad.`,
     categoria: 'reunion',
+    uso: 'recordatorio',
     estado: 'activa',
     creadoPor: 'Karien Diaz',
     creadoEn: new Date('2025-02-15'),
@@ -109,6 +111,7 @@ Con mucho gusto,
 {{nombre_encargado}}
 Equipo BioActiva`,
     categoria: 'email',
+    uso: 'seguimiento',
     estado: 'activa',
     creadoPor: 'Karien Diaz',
     creadoEn: new Date('2025-03-01'),
@@ -131,9 +134,28 @@ Saludos,
 {{nombre_encargado}}
 BioActiva`,
     categoria: 'otro',
-    estado: 'inactiva',
+    uso: 'seguimiento',
+    estado: 'activa',
     creadoPor: 'Administración',
     creadoEn: new Date('2025-03-10'),
+    actualizadoEn: new Date('2025-04-01'),
+    enUso: false,
+  },
+  {
+    id: 'TPL-007',
+    nombre: 'Recordatorio de pendiente interno',
+    asunto: 'Pendiente: {{servicio_interes}} — {{nombre_organizacion}}',
+    cuerpo: `Tienes un pendiente con {{nombre_organizacion}}.
+
+Proyecto: {{servicio_interes}}
+Fecha límite: {{fecha_actividad}}
+
+Revisa el estado del lead y actualiza los avances antes de esa fecha.`,
+    categoria: 'otro',
+    uso: 'recordatorio',
+    estado: 'activa',
+    creadoPor: 'Administración',
+    creadoEn: new Date('2025-04-01'),
     actualizadoEn: new Date('2025-04-01'),
     enUso: false,
   },
@@ -146,6 +168,7 @@ interface EmailTemplateStore {
     asunto: string;
     cuerpo: string;
     categoria: CategoriaPlantilla;
+    uso: UsoPlantilla;
     estado: EstadoPlantilla;
     creadoPor: string;
   }) => EmailTemplate;
@@ -154,13 +177,16 @@ interface EmailTemplateStore {
     asunto?: string;
     cuerpo?: string;
     categoria?: CategoriaPlantilla;
+    uso?: UsoPlantilla;
     estado?: EstadoPlantilla;
   }) => void;
   remove: (id: string) => void;
   deactivate: (id: string) => void;
 }
 
-export const useEmailTemplateStore = create<EmailTemplateStore>((set, get) => ({
+export const useEmailTemplateStore = create<EmailTemplateStore>()(
+  persist(
+    (set, get) => ({
   templates: initialTemplates,
 
   create: (data) => {
@@ -195,4 +221,7 @@ export const useEmailTemplateStore = create<EmailTemplateStore>((set, get) => ({
       ),
     }));
   },
-}));
+    }),
+    { name: 'bioactiva-templates-v1', version: 1 },
+  ),
+);

@@ -47,6 +47,6 @@ export const useNotificationStore = create<NotificationState>()(
         });
       }
     }),
-    { name: 'notification-store' }
+    { name: 'notification-store-v2' }
   )
 );

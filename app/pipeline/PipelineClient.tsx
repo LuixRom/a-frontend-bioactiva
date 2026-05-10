@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo, useCallback, useTransition } from 'react';
+import { useState, useMemo, useCallback, useTransition, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { DragDropContext, type DropResult } from '@hello-pangea/dnd';
 import { Plus, ArrowLeft } from 'lucide-react';
@@ -21,6 +21,7 @@ import LeadEditView from '@/src/components/pipeline/LeadEditView';
 import { ESTADOS_LEAD } from '@/src/lib/constants';
 import { useAuthStore } from '@/src/store/authStore';
 import { useSidebarStore } from '@/src/store/sidebarStore';
+import { useLeadStore } from '@/src/store/leadStore';
 import {
   updateLeadEstado,
   createLead,
@@ -74,6 +75,7 @@ interface PipelineClientProps {
    * seleccionados.
    */
   prefill?: { organizacionCodigo?: string; contactoCodigo?: string } | null;
+  defaultLeadId?: string;
 }
 
 export default function PipelineClient({
@@ -81,6 +83,7 @@ export default function PipelineClient({
   organizations,
   contacts,
   prefill,
+  defaultLeadId,
 }: PipelineClientProps) {
   const router = useRouter();
   const [, startTransition] = useTransition();
@@ -97,7 +100,8 @@ export default function PipelineClient({
     [userName, userEmail],
   );
 
-  const [leads, setLeads] = useState<Lead[]>(initialLeads);
+  const leads    = useLeadStore((s) => s.leads);
+  const setLeads = useLeadStore((s) => s.setLeads);
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [view, setView] = useState<'pipeline' | 'new-lead' | 'edit-lead'>(prefill ? 'new-lead' : 'pipeline');
@@ -108,6 +112,18 @@ export default function PipelineClient({
     if (prefill?.contactoCodigo)     base.contactoId     = prefill.contactoCodigo;
     return base;
   });
+
+  // Abrir lead directamente si viene ?leadId= desde notificaciones
+  useEffect(() => {
+    if (!defaultLeadId) return;
+    const lead = initialLeads.find(l => l.id === defaultLeadId);
+    if (lead) {
+      setEditingLead(lead);
+      setView('edit-lead');
+      closeSidebar();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Lead pendiente de confirmar cierre (vía drag o panel). */
   const [closingState, setClosingState] = useState<{
