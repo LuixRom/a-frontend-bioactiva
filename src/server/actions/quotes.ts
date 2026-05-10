@@ -33,7 +33,26 @@ export async function getQuoteByCodigo(id: string): Promise<Quote | null> {
 
 export async function createQuote(input: QuoteInput): Promise<Quote> {
   console.info('[MOCK] createQuote', input);
-  return mockQuotes[0];
+  const id = `COT-${new Date().getFullYear()}-${String(mockQuotes.length + 1).padStart(3, '0')}`;
+  const newQuote: Quote = {
+    id,
+    leadId:          input.leadCodigo,
+    anio:            input.anio,
+    mes:             input.mes,
+    dirigidoA:       input.dirigidoA,
+    fechaCotizacion: new Date(input.fechaCotizacion),
+    cliente:         input.cliente,
+    producto:        input.producto ?? undefined,
+    servicio:        input.servicio,
+    monto:           input.monto,
+    moneda:          input.moneda,
+    estado:          input.estado,
+    remitente:       input.remitente,
+    observacion:     input.observacion ?? undefined,
+    linkPropuesta:   input.linkPropuesta ?? undefined,
+    creadoEn:        new Date(),
+  };
+  return newQuote;
 }
 
 export async function updateQuoteEstado(

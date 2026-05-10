@@ -18,12 +18,10 @@ export default function NotificationsPage() {
 
     const init = async () => {
       try {
-        const user = await findUserByEmail(userEmail);
-        if (user) {
-          setUserId(user.id);
-          const notis = await listNotifications(user.id);
-          setInitialNotifications(notis);
-        }
+        // En mock usamos el email directamente como userId
+        setUserId(userEmail);
+        const notis = await listNotifications(userEmail);
+        setInitialNotifications(notis);
       } catch (err) {
         console.error('Error initializing notifications:', err);
       } finally {

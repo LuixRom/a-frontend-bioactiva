@@ -1,43 +1,25 @@
 'use client';
 
-import { useState, useRef, useEffect, useMemo } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
-  Search, Plus, Bell, Building2, Users, Kanban,
-  AlertTriangle, Clock, CalendarDays, X, ChevronRight, Menu,
+  Bell,
+  AlertTriangle, Clock, CalendarDays, Menu,
 } from 'lucide-react';
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation';
+import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/src/store/authStore';
 import { useSidebarStore } from '@/src/store/sidebarStore';
 import { getInitials, cn, relativeTime } from '@/src/lib/utils';
-import { useGlobalSearch } from '@/src/hooks/useGlobalSearch';
-import { mockLeads, mockOrganizations } from '@/src/lib/mockData';
-import { getAlertLevel } from '@/src/lib/alertLevel';
-import { useNotificationStore } from '@/src/store/notificationStore';
 import MicrosoftStatusBadge from '@/src/components/MicrosoftStatusBadge';
 import { findUserByEmail } from '@/src/server/actions/users';
 import { listNotifications, getUnreadCount, markNotificationAsRead } from '@/src/server/actions/notifications';
 
 export default function TopBar() {
-  const { userName, userEmail, role } = useAuthStore();
+  const { userName, userEmail } = useAuthStore();
   const toggleSidebar = useSidebarStore((s) => s.toggle);
   const router   = useRouter();
-  const pathname = usePathname();
   const displayName = userName || userEmail || 'Usuario';
   const initials    = getInitials(displayName);
-
-  const isDashboard = pathname === '/';
-  const showSearch  = !isDashboard;
-
-  // ── Global search ────────────────────────────────────────────────────────
-  const [query, setQuery]   = useState('');
-  const [searchOpen, setSearchOpen] = useState(false);
-  const searchRef = useRef<HTMLDivElement>(null);
-  const results   = useGlobalSearch(query);
-  const hasResults =
-    results.organizations.length > 0 ||
-    results.contacts.length > 0 ||
-    results.leads.length > 0;
 
   // ── Notification bell (Real data) ───────────────────────────────────────
   const [bellOpen, setBellOpen] = useState(false);
@@ -83,12 +65,9 @@ export default function TopBar() {
     else router.push('/notifications');
   };
 
-  // ── Click-outside handler for both dropdowns ─────────────────────────────
+  // ── Click-outside handler ────────────────────────────────────────────────
   useEffect(() => {
     const handler = (e: MouseEvent) => {
-      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
-        setSearchOpen(false);
-      }
       if (bellRef.current && !bellRef.current.contains(e.target as Node)) {
         setBellOpen(false);
       }
@@ -99,9 +78,7 @@ export default function TopBar() {
 
   const go = (path: string) => {
     router.push(path);
-    setSearchOpen(false);
     setBellOpen(false);
-    setQuery('');
   };
 
   return (
@@ -116,88 +93,8 @@ export default function TopBar() {
         <Menu className="w-5 h-5" />
       </button>
 
-      {/* ── Left: Global Search (hidden on dashboard) ── */}
-      {showSearch ? (
-        <div className="flex-1 max-w-md relative group" ref={searchRef}>
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-text-muted group-focus-within:text-primary transition-colors z-10 pointer-events-none" />
-          <input
-            type="text"
-            value={query}
-            onChange={e => { setQuery(e.target.value); setSearchOpen(true); }}
-            onFocus={() => query.length >= 2 && setSearchOpen(true)}
-            placeholder="Buscar por RUC, nombre o lead..."
-            className="w-full pl-10 pr-4 py-2 bg-app-bg/50 border border-border-subtle rounded-xl text-sm outline-none focus:bg-surface focus:border-primary focus:ring-1 focus:ring-primary transition-all"
-          />
-
-          {searchOpen && hasResults && (
-            <div className="absolute top-full left-0 right-0 mt-2 bg-surface border border-border-subtle rounded-2xl shadow-premium z-50 overflow-hidden max-h-96 overflow-y-auto">
-
-              {results.organizations.length > 0 && (
-                <div>
-                  <p className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider bg-app-bg/50 border-b border-border-subtle">
-                    Organizaciones
-                  </p>
-                  {results.organizations.map(org => (
-                    <button key={org.id} onClick={() => go('/organizations')}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-app-bg text-left transition-colors">
-                      <Building2 className="w-4 h-4 text-text-muted flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-text truncate">{org.nombre}</p>
-                        <p className="text-xs text-text-muted truncate">
-                          {org.ruc || 'Sin RUC'}{org.sector ? ` · ${org.sector}` : ''}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {results.contacts.length > 0 && (
-                <div className="border-t border-border-subtle">
-                  <p className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider bg-app-bg/50 border-b border-border-subtle">
-                    Contactos
-                  </p>
-                  {results.contacts.map(contact => (
-                    <button key={contact.id} onClick={() => go('/contacts')}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-app-bg text-left transition-colors">
-                      <Users className="w-4 h-4 text-text-muted flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-text truncate">{contact.nombres} {contact.apellidos}</p>
-                        <p className="text-xs text-text-muted truncate">
-                          {contact.correo1}{contact.cargo ? ` · ${contact.cargo}` : ''}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              {results.leads.length > 0 && (
-                <div className="border-t border-border-subtle">
-                  <p className="px-4 py-2 text-[10px] font-bold text-text-muted uppercase tracking-wider bg-app-bg/50 border-b border-border-subtle">
-                    Leads
-                  </p>
-                  {results.leads.map(lead => (
-                    <button key={lead.id} onClick={() => go('/pipeline')}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-app-bg text-left transition-colors">
-                      <Kanban className="w-4 h-4 text-text-muted flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-text truncate">{lead.id}</p>
-                        <p className="text-xs text-text-muted truncate">
-                          {lead.servicioInteres}{lead.encargado ? ` · ${lead.encargado}` : ''}
-                        </p>
-                      </div>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      ) : (
-        /* Spacer so right section stays pushed right on dashboard */
-        <div className="flex-1" />
-      )}
+      {/* Spacer */}
+      <div className="flex-1" />
 
       {/* ── Right: Actions & Profile ── */}
       <div className="flex items-center gap-3">

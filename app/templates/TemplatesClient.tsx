@@ -3,14 +3,14 @@
 import { useState, useRef } from 'react';
 import {
   Plus, ArrowLeft, Eye, Pencil, Trash2, Users, Phone, Mail, Tag,
-  AlertTriangle, CheckCircle, XCircle,
+  AlertTriangle, CheckCircle, XCircle, Info,
 } from 'lucide-react';
 import { cn, formatDate } from '@/src/lib/utils';
 import { useEmailTemplateStore } from '@/src/store/emailTemplateStore';
 import { useAuthStore } from '@/src/store/authStore';
 import { useToast } from '@/src/components/ui/Toast';
 import DataTable from '@/src/components/ui/DataTable';
-import type { EmailTemplate, CategoriaPlantilla, EstadoPlantilla } from '@/src/types/emailTemplate';
+import type { EmailTemplate, CategoriaPlantilla, EstadoPlantilla, UsoPlantilla } from '@/src/types/emailTemplate';
 
 // ── Constantes ────────────────────────────────────────────────────────────────
 
@@ -22,12 +22,36 @@ const CATEGORIAS: Record<CategoriaPlantilla, { label: string; color: string; Ico
 };
 
 const VARIABLES = [
-  { key: '{{nombre_contacto}}',     label: 'Nombre contacto'    },
-  { key: '{{nombre_organizacion}}', label: 'Organización'       },
-  { key: '{{servicio_interes}}',    label: 'Servicio de interés' },
-  { key: '{{nombre_encargado}}',    label: 'Encargado'          },
-  { key: '{{fecha_actividad}}',     label: 'Fecha actividad'    },
-  { key: '{{estado_lead}}',         label: 'Estado del lead'    },
+  {
+    key: '{{nombre_contacto}}',
+    label: 'Nombre contacto',
+    tooltip: 'Nombre completo del contacto principal del lead.',
+  },
+  {
+    key: '{{nombre_organizacion}}',
+    label: 'Organización',
+    tooltip: 'Nombre de la empresa u organización del lead.',
+  },
+  {
+    key: '{{servicio_interes}}',
+    label: 'Servicio de interés',
+    tooltip: 'Servicio de interés registrado en el lead.',
+  },
+  {
+    key: '{{nombre_encargado}}',
+    label: 'Encargado',
+    tooltip: 'Asesor de Bioactiva responsable del lead.',
+  },
+  {
+    key: '{{fecha_actividad}}',
+    label: 'Fecha actividad',
+    tooltip: 'Fecha de la actividad seleccionada. Solo aplica en plantillas de Recordatorio — en Seguimiento el email se envía al instante y esta variable queda vacía.',
+  },
+  {
+    key: '{{estado_lead}}',
+    label: 'Estado del lead',
+    tooltip: 'Estado actual del lead (nuevo, en proceso, cerrado, etc.).',
+  },
 ];
 
 const SAMPLE_VALUES: Record<string, string> = {
@@ -44,6 +68,7 @@ const emptyForm = {
   asunto:    '',
   cuerpo:    '',
   categoria: 'email' as CategoriaPlantilla,
+  uso:       'ambos' as UsoPlantilla,
   estado:    'activa' as EstadoPlantilla,
 };
 
@@ -169,7 +194,7 @@ export default function TemplatesClient() {
 
   const goEdit = (tpl: EmailTemplate) => {
     setSelectedId(tpl.id);
-    setForm({ nombre: tpl.nombre, asunto: tpl.asunto, cuerpo: tpl.cuerpo, categoria: tpl.categoria, estado: tpl.estado });
+    setForm({ nombre: tpl.nombre, asunto: tpl.asunto, cuerpo: tpl.cuerpo, categoria: tpl.categoria, uso: tpl.uso, estado: tpl.estado });
     setErrors({});
     setView('edit');
   };
@@ -278,9 +303,9 @@ export default function TemplatesClient() {
     },
   ];
 
-  // ── Formulario compartido (new / edit) ─────────────────────────────────────
+  // ── Formulario compartido (new / edit) — función, no componente ───────────
 
-  const FormView = ({ mode }: { mode: 'new' | 'edit' }) => (
+  const renderForm = (mode: 'new' | 'edit') => (
     <div className="max-w-2xl w-full mx-auto animate-fade-in">
       <div className="rounded-2xl border border-border-subtle bg-surface p-8 space-y-6">
 
@@ -318,7 +343,7 @@ export default function TemplatesClient() {
           {errors.asunto && <p className="text-xs text-red-500">{errors.asunto}</p>}
         </div>
 
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-3 gap-4">
           {/* Categoría */}
           <div className="space-y-1.5">
             <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Categoría</label>
@@ -330,6 +355,28 @@ export default function TemplatesClient() {
               {(Object.keys(CATEGORIAS) as CategoriaPlantilla[]).map((k) => (
                 <option key={k} value={k}>{CATEGORIAS[k].label}</option>
               ))}
+            </select>
+          </div>
+
+          {/* Uso */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-bold text-text-muted uppercase tracking-wider flex items-center gap-1">
+              Uso
+              <span className="relative group">
+                <Info className="w-3 h-3 text-text-muted/60 cursor-help" />
+                <span className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-56 p-2.5 bg-gray-900 text-white text-[10px] rounded-xl hidden group-hover:block z-50 leading-relaxed text-center shadow-xl">
+                  Define si esta plantilla aparece en <strong>Recordatorio</strong>, <strong>Seguimiento</strong> o en ambos tipos de notificación.
+                </span>
+              </span>
+            </label>
+            <select
+              value={form.uso}
+              onChange={(e) => setForm((f) => ({ ...f, uso: e.target.value as UsoPlantilla }))}
+              className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+            >
+              <option value="ambos">Ambos</option>
+              <option value="recordatorio">Solo Recordatorio</option>
+              <option value="seguimiento">Solo Seguimiento</option>
             </select>
           </div>
 
@@ -355,14 +402,19 @@ export default function TemplatesClient() {
           </p>
           <div className="flex flex-wrap gap-2">
             {VARIABLES.map((v) => (
-              <button
-                key={v.key}
-                type="button"
-                onClick={() => insertVariable(v.key)}
-                className="px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-[11px] font-mono text-primary hover:bg-primary/20 transition-colors"
-              >
-                {v.key}
-              </button>
+              <div key={v.key} className="relative group">
+                <button
+                  type="button"
+                  onClick={() => insertVariable(v.key)}
+                  className="flex items-center gap-1 px-2.5 py-1 bg-primary/10 border border-primary/20 rounded-lg text-[11px] font-mono text-primary hover:bg-primary/20 transition-colors"
+                >
+                  {v.key}
+                  <Info className="w-3 h-3 opacity-40" />
+                </button>
+                <div className="pointer-events-none absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-52 p-2.5 bg-gray-900 text-white text-[10px] rounded-xl hidden group-hover:block z-50 leading-relaxed text-center shadow-xl">
+                  {v.tooltip}
+                </div>
+              </div>
             ))}
           </div>
         </div>
@@ -451,7 +503,7 @@ export default function TemplatesClient() {
             <ArrowLeft className="w-4 h-4" /> Volver a Plantillas
           </button>
           <h1 className="text-2xl font-black text-text">Nueva Plantilla</h1>
-          <FormView mode="new" />
+          {renderForm('new')}
         </div>
       )}
 
@@ -462,7 +514,7 @@ export default function TemplatesClient() {
             <ArrowLeft className="w-4 h-4" /> Volver al detalle
           </button>
           <h1 className="text-2xl font-black text-text">Editar Plantilla</h1>
-          <FormView mode="edit" />
+          {renderForm('edit')}
         </div>
       )}
 
@@ -502,6 +554,12 @@ export default function TemplatesClient() {
                 <div>
                   <p className="text-[10px] font-bold text-text-muted uppercase">Categoría</p>
                   <div className="mt-1"><CategoriaBadge categoria={selectedTemplate.categoria} /></div>
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-text-muted uppercase">Uso</p>
+                  <span className="inline-flex items-center gap-1 mt-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase bg-primary/10 text-primary">
+                    {selectedTemplate.uso === 'recordatorio' ? '🔔 Recordatorio' : selectedTemplate.uso === 'seguimiento' ? '📤 Seguimiento' : '✓ Ambos'}
+                  </span>
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-text-muted uppercase">Estado</p>
