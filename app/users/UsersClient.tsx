@@ -539,8 +539,8 @@ export default function UsersClient({ initialUsers, initialInvitations }: UsersC
                 </>
               )}
 
-              {/* Password (en create y change-password) */}
-              {(mode === 'create' || mode === 'change-password') && (
+              {/* Password (solo en change-password — en create el usuario la define al activar) */}
+              {mode === 'change-password' && (
                 <>
                   <div>
                     <label
