@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useMemo } from 'react';
+import { useAuthStore } from '@/src/store/authStore';
+import { useLeadStore } from '@/src/store/leadStore';
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell,
   PieChart, Pie, Legend,
@@ -68,13 +70,39 @@ function MetricCard({
 }
 
 export default function DashboardClient({
-  initialLeads,
   organizations,
   contacts,
   quotes,
-}: DashboardClientProps) {
+}: Omit<DashboardClientProps, 'initialLeads'>) {
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-  const [leads, setLeads] = useState(initialLeads);
+  const userEmail = useAuthStore((s) => s.userEmail);
+  const role      = useAuthStore((s) => s.role);
+  const allLeads  = useLeadStore((s) => s.leads);
+
+  const leads = useMemo(
+    () => role === 'Trabajador' ? allLeads.filter((l) => l.encargadoEmail === userEmail) : allLeads,
+    [role, userEmail, allLeads],
+  );
+
+  const myLeadIds = useMemo(() => new Set(leads.map((l) => l.id)), [leads]);
+
+  // Cotizaciones filtradas al trabajador (pertenecen a leads)
+  const filteredQuotes = useMemo(
+    () => role === 'Trabajador' ? quotes.filter((q) => myLeadIds.has(q.leadId)) : quotes,
+    [role, quotes, myLeadIds],
+  );
+
+  // En el dashboard solo se muestran orgs/contactos ligados a los leads del trabajador
+  // (las páginas /contacts y /organizations sí muestran todo)
+  const filteredOrganizations = useMemo(() => {
+    if (role !== 'Trabajador') return organizations;
+    return organizations.filter((o) => leads.some((l) => l.organizacionId === o.id));
+  }, [role, organizations, leads]);
+
+  const filteredContacts = useMemo(() => {
+    if (role !== 'Trabajador') return contacts;
+    return contacts.filter((c) => leads.some((l) => l.contactoId === c.id));
+  }, [role, contacts, leads]);
 
   // ─── KPIs financieros y del pipeline ──────────────────────────────
   const metrics = useMemo(() => {
@@ -89,12 +117,12 @@ export default function DashboardClient({
     const ganadosLeadIds = new Set(ganados.map((l) => l.id));
 
     // Pipeline value: Σ cotizaciones de leads activos (independiente del estado de la cotización)
-    const pipelineValue = quotes
+    const pipelineValue = filteredQuotes
       .filter((q) => activeLeadIds.has(q.leadId))
       .reduce((sum, q) => sum + q.monto, 0);
 
     // Σ cotizaciones ganadas (cerrado_ganado + estado aceptada)
-    const ganadoTotal = quotes
+    const ganadoTotal = filteredQuotes
       .filter((q) => ganadosLeadIds.has(q.leadId) && q.estado === 'aceptada')
       .reduce((sum, q) => sum + q.monto, 0);
 
@@ -104,13 +132,13 @@ export default function DashboardClient({
       : 0;
 
     // Cotizaciones del mes actual
-    const cotsMes = quotes.filter((q) => {
+    const cotsMes = filteredQuotes.filter((q) => {
       const d = new Date(q.fechaCotizacion);
       return d.getMonth() === thisMonth && d.getFullYear() === thisYear;
     }).length;
 
     // Ticket promedio de cotizaciones aceptadas
-    const aceptadas = quotes.filter((q) => q.estado === 'aceptada');
+    const aceptadas = filteredQuotes.filter((q) => q.estado === 'aceptada');
     const ticketPromedio = aceptadas.length > 0
       ? aceptadas.reduce((sum, q) => sum + q.monto, 0) / aceptadas.length
       : 0;
@@ -126,7 +154,7 @@ export default function DashboardClient({
       ganados:       ganados.length,
       perdidos:      perdidos.length,
     };
-  }, [leads, quotes]);
+  }, [leads, filteredQuotes]);
 
   // ─── Distribución por estado (kanban) ─────────────────────────────
   const pipelineData = useMemo(
@@ -142,7 +170,7 @@ export default function DashboardClient({
   // ─── Cotizaciones por mes (todos los años) ────────────────────────
   const cotizacionesPorMes = useMemo(() => {
     const buckets: Record<string, { mes: string; cantidad: number; monto: number }> = {};
-    for (const q of quotes) {
+    for (const q of filteredQuotes) {
       const d = new Date(q.fechaCotizacion);
       const mesIdx = d.getMonth();
       const key = MESES_ES[mesIdx];
@@ -152,7 +180,7 @@ export default function DashboardClient({
     }
     // ordenar por orden de mes natural
     return MESES_ES.map((m) => buckets[m] ?? { mes: m.slice(0, 3), cantidad: 0, monto: 0 });
-  }, [quotes]);
+  }, [filteredQuotes]);
 
   // ─── Top 5 organizaciones por monto cerrado ───────────────────────
   const topOrgsPorMonto = useMemo(() => {
@@ -162,10 +190,10 @@ export default function DashboardClient({
       orgIdToLeadIds.get(l.organizacionId)!.add(l.id);
     }
 
-    const result = organizations
+    const result = filteredOrganizations
       .map((org) => {
         const leadIds = orgIdToLeadIds.get(org.id) ?? new Set();
-        const monto = quotes
+        const monto = filteredQuotes
           .filter((q) => leadIds.has(q.leadId) && q.estado === 'aceptada')
           .reduce((sum, q) => sum + q.monto, 0);
         return { org, monto };
@@ -175,12 +203,12 @@ export default function DashboardClient({
       .slice(0, 5);
 
     return result;
-  }, [organizations, leads, quotes]);
+  }, [filteredOrganizations, leads, filteredQuotes]);
 
   // ─── Distribución por sector ──────────────────────────────────────
   const distribucionSectores = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const o of organizations) {
+    for (const o of filteredOrganizations) {
       const sector = o.sector ?? 'Sin sector';
       counts[sector] = (counts[sector] ?? 0) + 1;
     }
@@ -191,7 +219,7 @@ export default function DashboardClient({
         color: SECTOR_COLORS[i % SECTOR_COLORS.length],
       }))
       .sort((a, b) => b.value - a.value);
-  }, [organizations]);
+  }, [filteredOrganizations]);
 
   // ─── Alertas activas ──────────────────────────────────────────────
   const alertLeads = useMemo(
@@ -219,8 +247,8 @@ export default function DashboardClient({
     return all.sort((a, b) => b.fecha.getTime() - a.fecha.getTime()).slice(0, 10);
   }, [leads]);
 
-  const panelOrg     = selectedLead ? organizations.find((o) => o.id === selectedLead.organizacionId) : null;
-  const panelContact = selectedLead ? contacts.find((c) => c.id === selectedLead.contactoId) : null;
+  const panelOrg     = selectedLead ? filteredOrganizations.find((o) => o.id === selectedLead.organizacionId) : null;
+  const panelContact = selectedLead ? filteredContacts.find((c) => c.id === selectedLead.contactoId) : null;
 
   return (
     <div className="space-y-8 animate-fade-in">
@@ -284,8 +312,8 @@ export default function DashboardClient({
         />
         <MetricCard
           label="Organizaciones"
-          value={organizations.length}
-          sublabel={`${contacts.length} contactos`}
+          value={filteredOrganizations.length}
+          sublabel={`${filteredContacts.length} contactos`}
           icon={Building2}
           color="amber"
         />
@@ -326,7 +354,7 @@ export default function DashboardClient({
                   >
                     <div
                       className={cn(
-                        'w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0',
+                        'w-8 h-8 rounded-lg flex items-center justify-center shrink-0',
                         level === 'danger' ? 'bg-red-50' : 'bg-amber-50',
                       )}
                     >
@@ -394,14 +422,14 @@ export default function DashboardClient({
                   key={row.org.id}
                   className="flex items-center gap-3 p-3 bg-app-bg/30 rounded-xl"
                 >
-                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-black flex items-center justify-center flex-shrink-0">
+                  <div className="w-6 h-6 rounded-full bg-primary/10 text-primary text-xs font-black flex items-center justify-center shrink-0">
                     {idx + 1}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-bold text-text truncate">{row.org.nombre}</p>
                     <p className="text-[10px] text-text-muted truncate">{row.org.sector ?? '—'}</p>
                   </div>
-                  <p className="text-xs font-black text-primary flex-shrink-0">
+                  <p className="text-xs font-black text-primary shrink-0">
                     {formatCurrency(row.monto, 'PEN')}
                   </p>
                 </div>

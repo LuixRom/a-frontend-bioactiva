@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Save, Plus, Loader2, CheckCircle2, RotateCcw, ArrowLeft, Bell, Send, XCircle } from 'lucide-react';
+import { useState, useEffect, useRef } from 'react';
+import { Save, Plus, Loader2, CheckCircle2, RotateCcw, ArrowLeft, Bell, Send, XCircle, X, AlertTriangle } from 'lucide-react';
 import type { Lead, Activity } from '@/src/types/crm';
 import Timeline from '@/src/components/ui/Timeline';
 import { checkAndNotify } from '@/src/lib/checkAndNotify';
@@ -23,16 +23,17 @@ import {
   MsConsentRequiredError,
 } from '@/src/hooks/useMsGraph';
 
+const localDate = (offsetDays = 0) => {
+  const d = new Date(Date.now() + offsetDays * 86_400_000);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+
 const ESTADOS = ESTADOS_LEAD.map(({ id, label }) => ({ value: id, label }));
 const ACTIVITY_TIPOS = [
   { value: 'reunion', label: 'Reunión' },
   { value: 'llamada', label: 'Llamada' },
   { value: 'email',   label: 'Email' },
   { value: 'otro',    label: 'Otro' },
-] as const;
-const ACTIVITY_ESTADOS = [
-  { value: 'pendiente', label: 'Pendiente' },
-  { value: 'realizada', label: 'Realizada' },
 ] as const;
 
 interface LeadEditViewProps {
@@ -66,16 +67,45 @@ export default function LeadEditView({
   const [tabEventAdded, setTabEventAdded] = useState(false);
   const [form, setForm] = useState<Partial<Lead>>({});
   const [activityForm, setActivityForm] = useState({
+    nombre: '',
     tipo: 'reunion' as Activity['tipo'],
-    estado: 'pendiente' as Activity['estado'],
     nota: '',
     responsable: userName || 'Equipo Bioactiva',
-    fecha: new Date().toISOString().slice(0, 10),
-    fechaFin: new Date().toISOString().slice(0, 10),
+    fecha: localDate(),
+    fechaFin: localDate(),
   });
+
+  // Sync ALL form fields from pending activity when the pending activity changes (by ID)
+  const pendingActIdRef = useRef<string | null>(null);
+  useEffect(() => {
+    const pending = lead.actividades.find(a => a.estado !== 'realizada');
+    if (pending && pending.id !== pendingActIdRef.current) {
+      pendingActIdRef.current = pending.id;
+      const toInput = (d: Date | undefined) =>
+        d ? new Date(d).toLocaleDateString('en-CA') : localDate();
+      setActivityForm({
+        nombre: pending.nombre ?? '',
+        tipo: pending.tipo,
+        responsable: pending.responsable,
+        fecha: toInput(pending.fecha instanceof Date ? pending.fecha : new Date(pending.fecha)),
+        fechaFin: toInput(pending.fechaFin instanceof Date ? pending.fechaFin : pending.fechaFin ? new Date(pending.fechaFin) : undefined),
+        nota: pending.nota,
+      });
+    } else if (!pending) {
+      pendingActIdRef.current = null;
+    }
+  }, [lead.actividades]);
+
+  const [confirmReassign, setConfirmReassign] = useState<{
+    pendingActivityId: string;
+    newResponsable: string;
+    newEmail: string;
+  } | null>(null);
 
   const { notifications: leadNotifs, create: createNotif, cancel: cancelNotif, hasActiveForActivity } = useLeadNotificationStore();
   const { templates: emailTemplates } = useEmailTemplateStore();
+  const [confirmState, setConfirmState] = useState<{ notifId: string; activityNota: string } | null>(null);
+  const [confirmText, setConfirmText] = useState('');
 
   const mkDefaultNotifForm = () => ({
     activityId: '',
@@ -84,13 +114,13 @@ export default function LeadEditView({
     templateId: '',
     asuntoEditado: '',
     cuerpoEditado: '',
-    fechaProgramada: new Date().toISOString().slice(0, 10),
+    fechaProgramada: localDate(),
     horaProgramada: '09:00',
     // Solo seguimiento — correo externo al cliente
     templateClienteId: '',
     asuntoClienteEditado: '',
     cuerpoClienteEditado: '',
-    fechaCliente: new Date(Date.now() + 86_400_000).toISOString().slice(0, 10),
+    fechaCliente: localDate(1),
     horaCliente: '09:00',
     emailClienteSeleccionado: contactoEmail ?? '',
   });
@@ -99,18 +129,6 @@ export default function LeadEditView({
 
   // Solo recordatorios programados — enviadas y canceladas no aparecen aquí
   const activeNotifsForLead = leadNotifs.filter(n => n.leadId === lead.id && n.estadoBase === 'programada');
-
-  // Actividades sin notificación activa (disponibles para crear)
-  const availableActivities = lead.actividades.filter(
-    a => !hasActiveForActivity(lead.id, a.id),
-  );
-
-  // Actividades vencidas sin notificación (alerta inteligente)
-  const vencidasSinNotif = availableActivities.filter(
-    a => getActivityStatus(a) === 'vencida',
-  );
-
-  const selectedActivity = lead.actividades.find(a => a.id === notifForm.activityId);
 
   // Plantillas filtradas por tipo de notificación seleccionado
   const templatesForTipo = emailTemplates.filter(t =>
@@ -162,7 +180,7 @@ export default function LeadEditView({
   };
 
   const handleSendNotif = async () => {
-    if (!notifForm.activityId) { showToast('Selecciona una actividad', 'error'); return; }
+    if (!currentActivity) { showToast('No hay actividad pendiente', 'error'); return; }
     if (!notifForm.templateId) { showToast('Selecciona una plantilla para el correo al responsable', 'error'); return; }
     if (!notifForm.fechaProgramada) { showToast('Selecciona una fecha', 'error'); return; }
 
@@ -192,7 +210,7 @@ export default function LeadEditView({
     setSendingNotif(true);
     try {
       const fechaConHora = (() => {
-        const d = new Date(notifForm.fechaProgramada);
+        const d = new Date(notifForm.fechaProgramada + 'T00:00:00');
         const [hh, mm] = notifForm.horaProgramada.split(':').map(Number);
         d.setHours(hh, mm, 0, 0);
         return d;
@@ -200,7 +218,7 @@ export default function LeadEditView({
 
       const fechaClienteConHora = notifForm.tipo === 'seguimiento'
         ? (() => {
-            const d = new Date(notifForm.fechaCliente);
+            const d = new Date(notifForm.fechaCliente + 'T00:00:00');
             const [hh, mm] = notifForm.horaCliente.split(':').map(Number);
             d.setHours(hh, mm, 0, 0);
             return d;
@@ -213,8 +231,8 @@ export default function LeadEditView({
 
       createNotif({
         leadId: lead.id,
-        activityId: notifForm.activityId,
-        activityNota: selectedActivity?.nota ?? '',
+        activityId: currentActivity.id,
+        activityNota: currentActivity.nombre || currentActivity.nota || '',
         orgNombre,
         contactoNombre,
         tipo: notifForm.tipo,
@@ -259,9 +277,45 @@ export default function LeadEditView({
   const merged = { ...lead, ...form };
   const fieldClass = 'w-full px-3 py-2.5 bg-app-bg/40 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all';
   const labelClass = 'text-[10px] font-bold text-text-muted uppercase tracking-wider block mb-1';
-  const scheduledActivities = [...lead.actividades].sort(
-    (a, b) => new Date(a.fecha).getTime() - new Date(b.fecha).getTime(),
-  );
+
+  // Actividad actual: más reciente no realizada; fallback: la más reciente
+  const sortedActs = [...lead.actividades].sort((a, b) => new Date(b.fecha).getTime() - new Date(a.fecha).getTime());
+  const currentActivity = sortedActs.find(a => a.estado !== 'realizada') ?? sortedActs[0];
+  const currentNotif = currentActivity
+    ? leadNotifs.find(n => n.leadId === lead.id && n.activityId === currentActivity.id && n.estadoBase === 'programada')
+    : undefined;
+
+  // La notificación siempre apunta a la actividad pendiente actual
+  const selectedActivity = currentActivity;
+  // Bloqueado si la actividad ya tiene notif programada o enviada
+  const notifBloqueada = currentActivity
+    ? hasActiveForActivity(lead.id, currentActivity.id)
+    : false;
+
+  // Confirmación modal — cancelar notificación
+  const confirmPhrase = confirmState ? `eliminar actividad ${confirmState.activityNota}`.trim() : '';
+  const confirmMatch = confirmText.trim().toLowerCase() === confirmPhrase.toLowerCase();
+  const openConfirm = (notifId: string, activityNota: string) => { setConfirmState({ notifId, activityNota }); setConfirmText(''); };
+  const closeConfirm = () => { setConfirmState(null); setConfirmText(''); };
+  const handleConfirmCancel = () => {
+    if (!confirmMatch || !confirmState) return;
+    cancelNotif(confirmState.notifId);
+    showToast('Notificación cancelada', 'success');
+    closeConfirm();
+  };
+
+  // Confirmación modal — eliminar actividad
+  const [confirmDeleteAct, setConfirmDeleteAct] = useState<{ id: string; nombre: string } | null>(null);
+  const [confirmDeleteText, setConfirmDeleteText] = useState('');
+  const confirmDeletePhrase = confirmDeleteAct ? `eliminar ${confirmDeleteAct.nombre}` : '';
+  const confirmDeleteMatch = confirmDeleteText.trim().toLowerCase() === confirmDeletePhrase.toLowerCase();
+  const openDeleteAct = (id: string, nombre: string) => { setConfirmDeleteAct({ id, nombre }); setConfirmDeleteText(''); };
+  const closeDeleteAct = () => { setConfirmDeleteAct(null); setConfirmDeleteText(''); };
+  const handleConfirmDeleteAct = () => {
+    if (!confirmDeleteMatch || !confirmDeleteAct) return;
+    handleDeleteActivity(confirmDeleteAct.id);
+    closeDeleteAct();
+  };
 
   const handleGraphError = (err: unknown, fallbackMsg: string): void => {
     if (err instanceof MsNotConnectedError) {
@@ -307,9 +361,98 @@ export default function LeadEditView({
     }
   };
 
+  const handleNoteChange = (activityId: string, nota: string) => {
+    const updatedActivities = lead.actividades.map(a =>
+      a.id === activityId ? { ...a, nota } : a,
+    );
+    onLeadUpdate({ ...lead, actividades: updatedActivities });
+  };
+
+  const doActivityUpdate = (pendingActivityId: string, reassignLead: boolean) => {
+    const updatedActivities = lead.actividades.map(a =>
+      a.id === pendingActivityId
+        ? {
+            ...a,
+            nombre: activityForm.nombre,
+            tipo: activityForm.tipo,
+            responsable: activityForm.responsable,
+            fecha: new Date(activityForm.fecha + 'T12:00:00'),
+            fechaFin: activityForm.fechaFin ? new Date(activityForm.fechaFin + 'T12:00:00') : undefined,
+            nota: activityForm.nota,
+          }
+        : a,
+    );
+    let updatedLead = syncLeadNextActivity({ ...lead, actividades: updatedActivities });
+    if (reassignLead) {
+      const u = users.find(mu => mu.name === activityForm.responsable);
+      updatedLead = { ...updatedLead, encargado: activityForm.responsable, encargadoEmail: u?.email ?? '' };
+    }
+    onLeadUpdate(updatedLead);
+    showToast(reassignLead ? `Lead reasignado a ${activityForm.responsable}` : 'Actividad actualizada', 'success');
+    setConfirmReassign(null);
+    if (reassignLead) onBack();
+  };
+
+  const handleMarkReminderSent = (n: typeof leadNotifs[number]) => {
+    const assocActivity = lead.actividades.find(a => a.id === n.activityId);
+    const historialEntry: Activity = {
+      id: `act-reminder-${Date.now()}`,
+      nombre: 'Recordatorio enviado',
+      tipo: assocActivity?.tipo ?? 'email',
+      estado: 'realizada',
+      nota: n.asuntoResuelto || `Recordatorio enviado a ${n.emailResponsable}`,
+      responsable: n.nombreResponsable,
+      fecha: n.fechaProgramada instanceof Date ? n.fechaProgramada : new Date(n.fechaProgramada),
+      fechaCompletada: new Date(),
+    };
+    const updatedLead = syncLeadNextActivity({
+      ...lead,
+      actividades: [historialEntry, ...lead.actividades],
+    });
+    onLeadUpdate(updatedLead);
+    cancelNotif(n.id);
+    showToast('Recordatorio registrado en el historial', 'success');
+  };
+
+  const handleActivityUpdate = (pendingActivityId: string) => {
+    const responsableChanged = activityForm.responsable !== lead.encargado;
+    if (responsableChanged && activityForm.responsable) {
+      const u = users.find(mu => mu.name === activityForm.responsable);
+      setConfirmReassign({ pendingActivityId, newResponsable: activityForm.responsable, newEmail: u?.email ?? '' });
+      return;
+    }
+    doActivityUpdate(pendingActivityId, false);
+  };
+
+  const handleDeleteActivity = (activityId: string) => {
+    // Cancelar notificación activa asociada si existe
+    const notifActiva = leadNotifs.find(
+      n => n.leadId === lead.id && n.activityId === activityId && n.estadoBase === 'programada',
+    );
+    if (notifActiva) cancelNotif(notifActiva.id);
+
+    const updatedActivities = lead.actividades.filter(a => a.id !== activityId);
+    const updatedLead = syncLeadNextActivity({ ...lead, actividades: updatedActivities });
+    onLeadUpdate(updatedLead);
+
+    // Resetear form si no quedan actividades pendientes
+    const quedanPendientes = updatedActivities.some(a => a.estado !== 'realizada');
+    if (!quedanPendientes) {
+      setActivityForm({
+        nombre: '',
+        tipo: 'reunion',
+        nota: '',
+        responsable: userName || 'Equipo Bioactiva',
+        fecha: localDate(),
+        fechaFin: localDate(),
+      });
+    }
+    showToast('Actividad eliminada', 'success');
+  };
+
   const handleAddActivity = async () => {
     if (!activityForm.tipo) { showToast('El tipo es obligatorio', 'error'); return; }
-    if (!activityForm.nota.trim()) { showToast('La descripción es obligatoria', 'error'); return; }
+    if (!activityForm.nombre.trim()) { showToast('El nombre de la actividad es obligatorio', 'error'); return; }
     if (!activityForm.fecha) { showToast('La fecha es obligatoria', 'error'); return; }
 
     setSavingActivity(true);
@@ -317,9 +460,9 @@ export default function LeadEditView({
 
     if (activityForm.tipo === 'reunion' && isConnected) {
       try {
-        const start = new Date(activityForm.fecha);
+        const start = new Date(activityForm.fecha + 'T12:00:00');
         const end = activityForm.fechaFin
-          ? new Date(activityForm.fechaFin)
+          ? new Date(activityForm.fechaFin + 'T12:00:00')
           : new Date(start.getTime() + 30 * 60 * 1000);
 
         const attendees = contactoEmail
@@ -330,7 +473,7 @@ export default function LeadEditView({
         const event = await callGraph<GraphEvent>('/me/events', {
           method: 'POST',
           body: {
-            subject: `${activityForm.nota} — ${orgNombre || lead.id}`,
+            subject: `${activityForm.nombre || activityForm.nota} — ${orgNombre || lead.id}`,
             body: { contentType: 'HTML', content: `<p><strong>Lead:</strong> ${lead.id}</p>` },
             start: { dateTime: start.toISOString(), timeZone: 'America/Lima' },
             end:   { dateTime: end.toISOString(),   timeZone: 'America/Lima' },
@@ -348,10 +491,14 @@ export default function LeadEditView({
 
     try {
       const newAct: Activity = {
-        ...activityForm,
         id: `act-mock-${Date.now()}`,
-        fecha: new Date(activityForm.fecha),
-        fechaFin: activityForm.fechaFin ? new Date(activityForm.fechaFin) : undefined,
+        nombre: activityForm.nombre,
+        tipo: activityForm.tipo,
+        estado: 'pendiente',
+        nota: activityForm.nota,
+        responsable: activityForm.responsable,
+        fecha: new Date(activityForm.fecha + 'T12:00:00'),
+        fechaFin: activityForm.fechaFin ? new Date(activityForm.fechaFin + 'T12:00:00') : undefined,
         linkReunion,
       };
 
@@ -369,12 +516,6 @@ export default function LeadEditView({
       onLeadUpdate(updatedLead);
       await checkAndNotify(updatedLead);
       showToast('Actividad registrada', 'success');
-      setActivityForm({
-        tipo: 'reunion', estado: 'pendiente', nota: '',
-        responsable: userName || 'Equipo Bioactiva',
-        fecha: new Date().toISOString().slice(0, 10),
-        fechaFin: new Date().toISOString().slice(0, 10),
-      });
     } catch {
       showToast('Error al registrar actividad', 'error');
     } finally {
@@ -399,7 +540,17 @@ export default function LeadEditView({
       if (notifActiva) cancelNotif(notifActiva.id);
     }
 
-    showToast(nextState === 'realizada' ? 'Marcada como realizada' : 'Reabierta', 'success');
+    if (nextState === 'realizada') {
+      setActivityForm({
+        nombre: '',
+        tipo: 'reunion',
+        nota: '',
+        responsable: userName || 'Equipo Bioactiva',
+        fecha: localDate(),
+        fechaFin: localDate(),
+      });
+    }
+    showToast(nextState === 'realizada' ? 'Actividad completada' : 'Actividad reabierta', 'success');
   };
 
   return (
@@ -516,49 +667,47 @@ export default function LeadEditView({
               {saving ? <><Loader2 className="w-4 h-4 animate-spin" /> Guardando...</> : <><Save className="w-4 h-4" /> Guardar cambios</>}
             </button>
 
-            {/* Seguimientos programados */}
+            {/* Notificación Programada */}
             <div className="space-y-3 pt-2">
-              <p className="text-xs font-bold text-text uppercase tracking-wider">Seguimientos programados</p>
-              {scheduledActivities.length === 0 ? (
-                <p className="text-sm text-text-muted italic">Sin seguimientos programados.</p>
+              <div className="flex items-center gap-2">
+                <Bell className="w-3.5 h-3.5 text-text-muted" />
+                <p className="text-xs font-bold text-text uppercase tracking-wider">Notificación Programada</p>
+              </div>
+              {!currentNotif ? (
+                <p className="text-sm text-text-muted italic">
+                  {lead.actividades.length === 0
+                    ? 'Sin actividades registradas.'
+                    : 'Sin notificación activa para la actividad actual.'}
+                </p>
               ) : (
-                <div className="space-y-2">
-                  {scheduledActivities.map(activity => {
-                    const status = getActivityStatus(activity);
-                    const badgeClass = { pendiente: 'bg-amber-100 text-amber-700', realizada: 'bg-green-100 text-green-700', vencida: 'bg-red-100 text-red-700' }[status];
-                    return (
-                      <div key={activity.id} className="p-4 bg-app-bg/40 border border-border-subtle rounded-xl space-y-3">
-                        <div className="flex items-start justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-bold text-text">{activity.nota}</p>
-                            <p className="text-[10px] text-text-muted uppercase tracking-wider mt-1">
-                              {activity.tipo} · {new Date(activity.fecha).toLocaleDateString('es-PE')}
-                            </p>
-                          </div>
-                          <span className={cn('px-2 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider', badgeClass)}>{status}</span>
-                        </div>
-                        <div className="flex items-center justify-between gap-3">
-                          <p className="text-xs text-text-muted">Responsable: <span className="font-bold text-text">{activity.responsable}</span></p>
-                          <div className="flex gap-2">
-                            {activity.linkReunion && (
-                              <a href={activity.linkReunion} target="_blank" rel="noopener noreferrer" className="px-3 py-1.5 bg-[#5059C9] text-white rounded-lg text-xs font-bold hover:bg-[#4048A8] transition-colors">
-                                Unirse
-                              </a>
-                            )}
-                            {activity.estado !== 'realizada' ? (
-                              <button onClick={() => handleActivityStateChange(activity.id, 'realizada')} className="btn-secondary py-2 text-xs">
-                                <CheckCircle2 className="w-4 h-4" /> Marcar realizada
-                              </button>
-                            ) : (
-                              <button onClick={() => handleActivityStateChange(activity.id, 'pendiente')} className="btn-secondary py-2 text-xs">
-                                <RotateCcw className="w-4 h-4" /> Reabrir
-                              </button>
-                            )}
-                          </div>
-                        </div>
+                <div className={cn(
+                  'rounded-xl border p-4 space-y-2',
+                  getEstadoNotificacion(currentNotif) === 'vencida' ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200',
+                )}>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="space-y-1 flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-black uppercase', currentNotif.tipo === 'recordatorio' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>
+                          {currentNotif.tipo === 'recordatorio' ? '🔔 Recordatorio' : '📤 Seguimiento'}
+                        </span>
+                        <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-black uppercase', getEstadoNotificacion(currentNotif) === 'vencida' ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700')}>
+                          {getEstadoNotificacion(currentNotif)}
+                        </span>
                       </div>
-                    );
-                  })}
+                      <p className="text-xs text-text-muted truncate">Actividad: <span className="font-semibold text-text">{currentNotif.activityNota}</span></p>
+                      <p className="text-sm font-bold text-text truncate">{currentNotif.asuntoResuelto}</p>
+                      <p className="text-xs text-text-muted">
+                        {new Date(currentNotif.fechaProgramada).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric' })}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => openConfirm(currentNotif.id, currentNotif.activityNota)}
+                      className="shrink-0 p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors"
+                      title="Cancelar notificación"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -571,6 +720,17 @@ export default function LeadEditView({
           <div className="space-y-6">
             <div className="bg-app-bg/40 rounded-2xl p-4 border border-border-subtle space-y-4">
               <p className="text-xs font-bold text-text uppercase tracking-wider">Programar actividad</p>
+
+              <div>
+                <label className={labelClass}>Nombre de la actividad <span className="text-red-500">*</span></label>
+                <input
+                  type="text"
+                  value={activityForm.nombre}
+                  onChange={e => setActivityForm(f => ({ ...f, nombre: e.target.value }))}
+                  className={fieldClass}
+                  placeholder="Ej: Llamada de seguimiento, Presentación de propuesta..."
+                />
+              </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
@@ -592,84 +752,101 @@ export default function LeadEditView({
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className={labelClass}>Estado inicial</label>
-                  <select value={activityForm.estado} onChange={e => setActivityForm(f => ({ ...f, estado: e.target.value as Activity['estado'] }))} className={fieldClass}>
-                    {ACTIVITY_ESTADOS.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
-                  </select>
-                </div>
-                <div>
                   <label className={labelClass}>Fecha de inicio</label>
                   <input type="date" value={activityForm.fecha} onChange={e => setActivityForm(f => ({ ...f, fecha: e.target.value }))} className={fieldClass} />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className={labelClass}>Fecha de fin</label>
                   <input type="date" value={activityForm.fechaFin} onChange={e => setActivityForm(f => ({ ...f, fechaFin: e.target.value }))} className={fieldClass} />
                 </div>
-                <div className="flex items-end">
-                  <button
-                    onClick={async () => {
-                      if (tabEventAdded || addingTabEvent) return;
-                      setAddingTabEvent(true);
-                      try {
-                        const start = new Date(activityForm.fecha);
-                        const end = activityForm.fechaFin ? new Date(activityForm.fechaFin) : new Date(start.getTime() + 60 * 60 * 1000);
-                        const attendees = contactoEmail ? [{ emailAddress: { address: contactoEmail, name: contactoNombre || undefined }, type: 'required' as const }] : [];
-                        await callGraph('/me/events', {
-                          method: 'POST',
-                          body: {
-                            subject: activityForm.nota || `Actividad ${activityForm.tipo}`,
-                            body: { contentType: 'HTML', content: `<p><strong>Lead:</strong> ${lead.id}</p>` },
-                            start: { dateTime: start.toISOString(), timeZone: 'America/Lima' },
-                            end:   { dateTime: end.toISOString(),   timeZone: 'America/Lima' },
-                            attendees,
-                          },
-                        });
-                        setTabEventAdded(true);
-                        showToast(attendees.length ? `Evento agregado · invitación a ${contactoNombre || contactoEmail}` : 'Evento agregado a Outlook', 'success');
-                      } catch (e) {
-                        handleGraphError(e, 'No se pudo agregar a Outlook');
-                      } finally {
-                        setAddingTabEvent(false);
-                      }
-                    }}
-                    disabled={addingTabEvent || tabEventAdded}
-                    className={cn(
-                      'w-full text-xs font-bold rounded-xl px-3 py-2.5 transition-all flex items-center justify-center gap-2',
-                      tabEventAdded ? 'bg-green-600 text-white cursor-not-allowed' : 'text-primary border border-primary hover:bg-primary/10',
-                    )}
-                  >
-                    {addingTabEvent ? 'Agregando...' : tabEventAdded ? '✓ Agregado a Outlook' : '+ Outlook Calendar'}
-                  </button>
-                </div>
               </div>
-
-              <div>
-                <label className={labelClass}>Actividad o notas del contacto</label>
-                <textarea rows={3} value={activityForm.nota} onChange={e => setActivityForm(f => ({ ...f, nota: e.target.value }))} className={fieldClass} placeholder="¿Qué se conversó con el cliente?" />
-              </div>
-
-              {activityForm.tipo === 'reunion' && !isConnected && (
-                <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
-                  <p className="text-xs text-blue-800 font-medium">Conecta tu cuenta Microsoft para generar reuniones de Teams.</p>
-                  <Link href="/profile" className="text-xs font-bold text-blue-600 hover:underline">Ir a configuración →</Link>
-                </div>
-              )}
 
               <button
-                onClick={handleAddActivity}
-                disabled={savingActivity || !activityForm.nota.trim()}
-                className={cn('w-full disabled:opacity-40', activityForm.tipo === 'reunion' && isConnected ? 'bg-[#5059C9] hover:bg-[#4048A8] text-white py-3 rounded-xl font-semibold shadow-sm transition-all' : 'btn-primary')}
+                onClick={async () => {
+                  if (tabEventAdded || addingTabEvent) return;
+                  setAddingTabEvent(true);
+                  try {
+                    const start = new Date(activityForm.fecha + 'T12:00:00');
+                    const end = activityForm.fechaFin ? new Date(activityForm.fechaFin + 'T12:00:00') : new Date(start.getTime() + 60 * 60 * 1000);
+                    const attendees = contactoEmail ? [{ emailAddress: { address: contactoEmail, name: contactoNombre || undefined }, type: 'required' as const }] : [];
+                    await callGraph('/me/events', {
+                      method: 'POST',
+                      body: {
+                        subject: activityForm.nombre || activityForm.nota || `Actividad ${activityForm.tipo}`,
+                        body: { contentType: 'HTML', content: `<p><strong>Lead:</strong> ${lead.id}</p>` },
+                        start: { dateTime: start.toISOString(), timeZone: 'America/Lima' },
+                        end:   { dateTime: end.toISOString(),   timeZone: 'America/Lima' },
+                        attendees,
+                      },
+                    });
+                    setTabEventAdded(true);
+                    showToast(attendees.length ? `Evento agregado · invitación a ${contactoNombre || contactoEmail}` : 'Evento agregado a Outlook', 'success');
+                  } catch (e) {
+                    handleGraphError(e, 'No se pudo agregar a Outlook');
+                  } finally {
+                    setAddingTabEvent(false);
+                  }
+                }}
+                disabled={addingTabEvent || tabEventAdded}
+                className={cn(
+                  'w-full text-xs font-bold rounded-xl px-3 py-2.5 transition-all flex items-center justify-center gap-2',
+                  tabEventAdded ? 'bg-green-600 text-white cursor-not-allowed' : 'text-primary border border-primary hover:bg-primary/10',
+                )}
               >
-                {savingActivity
-                  ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Guardando...</>
-                  : activityForm.tipo === 'reunion' && isConnected
-                    ? <span className="flex items-center justify-center gap-2">Crear reunión de Teams</span>
-                    : <><Plus className="w-4 h-4 inline mr-2" /> Registrar actividad</>
-                }
+                {addingTabEvent ? 'Agregando...' : tabEventAdded ? '✓ Agregado a Outlook' : '+ Outlook Calendar'}
               </button>
+
+              {(() => {
+                const pendingActivity = lead.actividades.find(a => a.estado !== 'realizada');
+                return (
+                  <>
+                    <div>
+                      <label className={labelClass}>{pendingActivity ? 'Notas de la actividad' : 'Notas iniciales'}</label>
+                      <textarea
+                        rows={3}
+                        value={activityForm.nota}
+                        onChange={e => setActivityForm(f => ({ ...f, nota: e.target.value }))}
+                        className={fieldClass}
+                        placeholder="¿Qué se conversó o planeas hacer con el cliente?"
+                      />
+                    </div>
+
+                    {activityForm.tipo === 'reunion' && !isConnected && (
+                      <div className="bg-blue-50 border border-blue-200 rounded-xl p-3">
+                        <p className="text-xs text-blue-800 font-medium">Conecta tu cuenta Microsoft para generar reuniones de Teams.</p>
+                        <Link href="/profile" className="text-xs font-bold text-blue-600 hover:underline">Ir a configuración →</Link>
+                      </div>
+                    )}
+
+                    {pendingActivity ? (
+                      <div className="space-y-2">
+                        <button
+                          onClick={() => handleActivityUpdate(pendingActivity.id)}
+                          className="btn-primary w-full"
+                        >
+                          <Save className="w-4 h-4 inline mr-2" /> Guardar cambios
+                        </button>
+                        <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 text-center">
+                          Completa o elimina la actividad pendiente antes de registrar una nueva.
+                        </p>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={handleAddActivity}
+                        disabled={savingActivity || !activityForm.nombre.trim()}
+                        className={cn('w-full disabled:opacity-40', activityForm.tipo === 'reunion' && isConnected ? 'bg-[#5059C9] hover:bg-[#4048A8] text-white py-3 rounded-xl font-semibold shadow-sm transition-all' : 'btn-primary')}
+                      >
+                        {savingActivity
+                          ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" /> Guardando...</>
+                          : activityForm.tipo === 'reunion' && isConnected
+                            ? <span className="flex items-center justify-center gap-2">Crear reunión de Teams</span>
+                            : <><Plus className="w-4 h-4 inline mr-2" /> Registrar actividad</>
+                        }
+                      </button>
+                    )}
+                  </>
+                );
+              })()}
             </div>
 
             <div>
@@ -677,12 +854,18 @@ export default function LeadEditView({
               <Timeline
                 items={lead.actividades.map(a => ({
                   id: a.id,
+                  nombre: a.nombre,
                   fecha: a.fecha instanceof Date ? a.fecha : new Date(a.fecha),
                   tipo: a.tipo,
                   estado: a.estado,
                   nota: a.nota,
                   responsable: a.responsable,
                 }))}
+                onComplete={(id) => handleActivityStateChange(id, 'realizada')}
+                onDelete={(id) => {
+                  const act = lead.actividades.find(a => a.id === id);
+                  openDeleteAct(id, act?.nombre || act?.nota || id);
+                }}
               />
             </div>
           </div>
@@ -697,52 +880,58 @@ export default function LeadEditView({
               <div className="space-y-3">
                 <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Notificaciones</p>
                 {activeNotifsForLead.map(n => {
+                  if (n.tipo === 'recordatorio') {
+                    return (
+                      <div key={n.id} className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="space-y-1 flex-1 min-w-0">
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-blue-100 text-blue-700">
+                              🔔 Recordatorio
+                            </span>
+                            <p className="text-sm font-bold text-text pt-1">{n.activityNota}</p>
+                            <p className="text-xs text-text-muted">
+                              📧 Se enviará a <span className="font-semibold text-text">{n.emailResponsable}</span>
+                            </p>
+                            <p className="text-xs text-text-muted">
+                              📅 Fecha: <span className="font-semibold text-text">
+                                {new Date(n.fechaProgramada).toLocaleDateString('es-PE', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                              </span>
+                            </p>
+                          </div>
+                          <button
+                            onClick={() => openConfirm(n.id, n.activityNota)}
+                            className="shrink-0 p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors"
+                            title="Cancelar recordatorio"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
+                  // Seguimiento — card completo (sin cambios por ahora)
                   const estado = getEstadoNotificacion(n);
-                  const cardClass = estado === 'vencida'
-                    ? 'bg-red-50 border-red-200'
-                    : estado === 'enviada'
-                      ? 'bg-purple-50 border-purple-200'
-                      : 'bg-green-50 border-green-200';
-                  const estadoBadgeClass = estado === 'vencida'
-                    ? 'bg-red-100 text-red-700'
-                    : estado === 'enviada'
-                      ? 'bg-purple-100 text-purple-700'
-                      : 'bg-green-100 text-green-700';
+                  const cardClass = estado === 'vencida' ? 'bg-red-50 border-red-200' : estado === 'enviada' ? 'bg-purple-50 border-purple-200' : 'bg-green-50 border-green-200';
+                  const estadoBadgeClass = estado === 'vencida' ? 'bg-red-100 text-red-700' : estado === 'enviada' ? 'bg-purple-100 text-purple-700' : 'bg-green-100 text-green-700';
                   return (
                     <div key={n.id} className={cn('rounded-2xl border p-4 space-y-2', cardClass)}>
                       <div className="flex items-start justify-between gap-3">
                         <div className="space-y-1 flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap">
-                            <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-black uppercase', n.tipo === 'recordatorio' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700')}>
-                              {n.tipo === 'recordatorio' ? '🔔 Recordatorio' : '📤 Seguimiento'}
-                            </span>
-                            <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-black uppercase', estadoBadgeClass)}>
-                              {estado}
-                            </span>
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase bg-purple-100 text-purple-700">📤 Seguimiento</span>
+                            <span className={cn('px-2 py-0.5 rounded-full text-[10px] font-black uppercase', estadoBadgeClass)}>{estado}</span>
                           </div>
-                          <p className="text-xs text-text-muted">
-                            Actividad: <span className="font-semibold text-text">{n.activityNota}</span>
-                          </p>
+                          <p className="text-xs text-text-muted">Actividad: <span className="font-semibold text-text">{n.activityNota}</span></p>
                           <p className="text-sm font-bold text-text truncate">{n.asuntoResuelto}</p>
-                          <p className="text-xs text-text-muted">
-                            Plantilla: {n.templateNombre} · {new Date(n.fechaProgramada).toLocaleDateString('es-PE')}
-                          </p>
+                          <p className="text-xs text-text-muted">Plantilla: {n.templateNombre} · {new Date(n.fechaProgramada).toLocaleDateString('es-PE')}</p>
                           <p className="text-[10px] text-text-muted">
                             Responsable: <span className="font-semibold text-text">{n.nombreResponsable}</span>
-                            {n.nombreResponsable !== userName && (
-                              <span className="ml-1 text-amber-600">(visible solo en sus notificaciones globales)</span>
-                            )}
                           </p>
-                          {n.emailCliente && (
-                            <p className="text-[10px] text-text-muted">Cliente: {n.emailCliente}</p>
-                          )}
+                          {n.emailCliente && <p className="text-[10px] text-text-muted">Cliente: {n.emailCliente}</p>}
                         </div>
                         {estado !== 'enviada' && (
-                          <button
-                            onClick={() => { cancelNotif(n.id); showToast('Notificación cancelada', 'success'); }}
-                            className="shrink-0 p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors"
-                            title="Cancelar"
-                          >
+                          <button onClick={() => openConfirm(n.id, n.activityNota)} className="shrink-0 p-1.5 rounded-lg text-red-400 hover:text-red-600 hover:bg-red-100 transition-colors" title="Cancelar">
                             <XCircle className="w-4 h-4" />
                           </button>
                         )}
@@ -754,78 +943,37 @@ export default function LeadEditView({
             )}
 
             {/* Sin actividades registradas */}
-            {lead.actividades.length === 0 && (
+            {!currentActivity && (
               <div className="text-center py-8 bg-app-bg/30 rounded-2xl border border-dashed border-border-subtle">
                 <Bell className="w-8 h-8 text-text-muted/30 mx-auto mb-2" />
-                <p className="text-sm font-bold text-text-muted">Sin actividades registradas</p>
+                <p className="text-sm font-bold text-text-muted">Sin actividades pendientes</p>
                 <p className="text-xs text-text-muted mt-1">Registra una actividad primero para crear una notificación.</p>
               </div>
             )}
 
-            {/* Actividades vencidas sin notificación */}
-            {vencidasSinNotif.length > 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
-                <p className="text-[10px] font-bold text-amber-700 uppercase tracking-wider">
-                  ⚠️ Actividades vencidas sin notificación
+            {/* Bloqueado: actividad ya tiene notif programada o enviada */}
+            {currentActivity && notifBloqueada && (
+              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4">
+                <p className="text-sm font-bold text-amber-800">Notificación ya registrada</p>
+                <p className="text-xs text-amber-700 mt-1">
+                  La actividad <span className="font-semibold">{currentActivity.nombre || currentActivity.nota}</span> ya tiene una notificación programada o enviada. Completa o cancela la actual antes de crear una nueva.
                 </p>
-                <div className="space-y-1.5">
-                  {vencidasSinNotif.map(a => (
-                    <button
-                      key={a.id}
-                      onClick={() => {
-                        // Auto-selecciona seguimiento + mejor plantilla por tipo de actividad
-                        const candidatas = emailTemplates.filter(
-                          t => t.estado === 'activa' && (t.uso === 'seguimiento' || t.uso === 'ambos'),
-                        );
-                        const bestTemplate =
-                          candidatas.find(t => t.categoria === a.tipo) ??
-                          candidatas.find(t => t.id === 'TPL-006') ??
-                          candidatas[0];
-                        setNotifForm(f => ({
-                          ...f,
-                          activityId: a.id,
-                          tipo: 'seguimiento',
-                          templateId: bestTemplate?.id ?? '',
-                        }));
-                      }}
-                      className={cn(
-                        'w-full text-left p-3 rounded-xl border transition-all',
-                        notifForm.activityId === a.id
-                          ? 'bg-amber-200 border-amber-400'
-                          : 'bg-amber-100 border-amber-200 hover:bg-amber-200',
-                      )}
-                    >
-                      <p className="text-xs font-semibold text-amber-900 truncate">{a.nota}</p>
-                      <p className="text-[10px] text-amber-700 mt-0.5">
-                        {a.tipo} · {new Date(a.fecha).toLocaleDateString('es-PE')} · vencida
-                      </p>
-                    </button>
-                  ))}
-                </div>
-                <p className="text-[10px] text-amber-600">Selecciona una para crear su notificación rápidamente.</p>
               </div>
             )}
 
             {/* Formulario nueva notificación */}
-            {lead.actividades.length > 0 && availableActivities.length > 0 && (
+            {currentActivity && !notifBloqueada && (
               <div className="bg-app-bg/40 rounded-2xl p-5 border border-border-subtle space-y-4">
                 <p className="text-xs font-bold text-text uppercase tracking-wider">Nueva notificación</p>
 
-                {/* Actividad */}
-                <div>
-                  <label className={labelClass}>Actividad <span className="text-red-500">*</span></label>
-                  <select
-                    value={notifForm.activityId}
-                    onChange={e => setNotifForm(f => ({ ...f, activityId: e.target.value }))}
-                    className={fieldClass}
-                  >
-                    <option value="">Seleccionar actividad...</option>
-                    {availableActivities.map(a => (
-                      <option key={a.id} value={a.id}>
-                        {a.nota} · {new Date(a.fecha).toLocaleDateString('es-PE')} ({a.tipo})
-                      </option>
-                    ))}
-                  </select>
+                {/* Actividad actual — solo lectura */}
+                <div className="bg-surface rounded-xl border border-border-subtle px-4 py-3 space-y-0.5">
+                  <p className="text-[10px] font-bold text-text-muted uppercase tracking-wider">Actividad</p>
+                  <p className="text-sm font-bold text-text">{currentActivity.nombre || currentActivity.nota}</p>
+                  <p className="text-xs text-text-muted">
+                    {currentActivity.tipo} · {new Date(currentActivity.fecha).toLocaleDateString('es-PE')}
+                    {currentActivity.fechaFin ? ` → ${new Date(currentActivity.fechaFin).toLocaleDateString('es-PE')}` : ''}
+                  </p>
                 </div>
 
                 {/* Tipo */}
@@ -1078,7 +1226,7 @@ export default function LeadEditView({
 
                 <button
                   onClick={handleSendNotif}
-                  disabled={sendingNotif || !notifForm.activityId}
+                  disabled={sendingNotif || !currentActivity}
                   className="btn-primary w-full disabled:opacity-40"
                 >
                   {sendingNotif
@@ -1091,22 +1239,141 @@ export default function LeadEditView({
               </div>
             )}
 
-            {/* Todas las actividades ya tienen notificación */}
-            {lead.actividades.length > 0 && availableActivities.length === 0 && (
-              <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 space-y-2">
-                <p className="text-sm font-bold text-amber-800">Sin actividades disponibles para nueva notificación</p>
-                <p className="text-xs text-amber-700">
-                  Si desea registrar una nueva notificación, debe eliminar la que está asociada actualmente.
-                </p>
-                <p className="text-[10px] text-amber-600">
-                  Puede cancelar una notificación desde la lista de arriba o desde el Centro de Notificaciones.
-                </p>
-              </div>
-            )}
 
           </div>
         )}
       </div>
+
+      {/* Modal de confirmación de reasignación de responsable */}
+      {confirmReassign && (
+        <div className="fixed inset-0 z-200 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={() => setConfirmReassign(null)} />
+          <div className="relative bg-surface rounded-2xl border border-border-subtle shadow-2xl p-6 w-full max-w-md space-y-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-text">Cambio de responsable</h3>
+                <p className="text-sm text-text-muted mt-1">
+                  Estás asignando esta actividad a <span className="font-bold text-text">{confirmReassign.newResponsable}</span>.
+                  ¿También quieres reasignar el lead completo a este trabajador? Aparecerá en su panel.
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => doActivityUpdate(confirmReassign.pendingActivityId, true)}
+                className="w-full py-2.5 px-4 rounded-xl text-sm font-bold bg-primary text-white hover:bg-primary/90 transition-all"
+              >
+                Sí, reasignar lead a {confirmReassign.newResponsable}
+              </button>
+              <button
+                onClick={() => doActivityUpdate(confirmReassign.pendingActivityId, false)}
+                className="w-full py-2.5 px-4 rounded-xl text-sm font-bold bg-surface border border-border-subtle text-text hover:bg-app-bg transition-all"
+              >
+                No, solo actualizar la actividad
+              </button>
+              <button
+                onClick={() => setConfirmReassign(null)}
+                className="w-full py-2 text-xs text-text-muted hover:text-text transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación para eliminar actividad */}
+      {confirmDeleteAct && (
+        <div className="fixed inset-0 z-200 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeDeleteAct} />
+          <div className="relative bg-surface rounded-2xl border border-border-subtle shadow-2xl p-6 w-full max-w-md space-y-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-text">Eliminar actividad</h3>
+                <p className="text-xs text-text-muted mt-1">Se eliminará la actividad y sus notificaciones asociadas. Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
+
+            <div className="bg-app-bg/60 rounded-xl p-3 border border-border-subtle">
+              <p className="text-xs text-text-muted">Para confirmar, escribe exactamente:</p>
+              <p className="text-sm font-bold text-text mt-1 font-mono break-all">
+                eliminar {confirmDeleteAct.nombre}
+              </p>
+            </div>
+
+            <input
+              type="text"
+              value={confirmDeleteText}
+              onChange={e => setConfirmDeleteText(e.target.value)}
+              placeholder="Escribe la frase de confirmación..."
+              className="w-full px-3 py-2.5 bg-app-bg/40 border border-border-subtle rounded-xl text-sm outline-none focus:border-red-400 transition-all"
+              autoFocus
+            />
+
+            <div className="flex gap-3">
+              <button onClick={closeDeleteAct} className="btn-secondary flex-1">Cancelar</button>
+              <button
+                onClick={handleConfirmDeleteAct}
+                disabled={!confirmDeleteMatch}
+                className="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Confirmar eliminación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación para cancelar notificación */}
+      {confirmState && (
+        <div className="fixed inset-0 z-200 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={closeConfirm} />
+          <div className="relative bg-surface rounded-2xl border border-border-subtle shadow-2xl p-6 w-full max-w-md space-y-4 animate-fade-in">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5 text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-black text-text">Cancelar notificación</h3>
+                <p className="text-xs text-text-muted mt-1">Esta acción no se puede deshacer.</p>
+              </div>
+            </div>
+
+            <div className="bg-app-bg/60 rounded-xl p-3 border border-border-subtle">
+              <p className="text-xs text-text-muted">Para confirmar, escribe exactamente:</p>
+              <p className="text-sm font-bold text-text mt-1 font-mono break-all">
+                eliminar actividad {confirmState.activityNota}
+              </p>
+            </div>
+
+            <input
+              type="text"
+              value={confirmText}
+              onChange={e => setConfirmText(e.target.value)}
+              placeholder="Escribe la frase de confirmación..."
+              className="w-full px-3 py-2.5 bg-app-bg/40 border border-border-subtle rounded-xl text-sm outline-none focus:border-red-400 transition-all"
+              autoFocus
+            />
+
+            <div className="flex gap-3">
+              <button onClick={closeConfirm} className="btn-secondary flex-1">Cancelar</button>
+              <button
+                onClick={handleConfirmCancel}
+                disabled={!confirmMatch}
+                className="flex-1 py-2.5 px-4 rounded-xl text-sm font-bold bg-red-600 text-white hover:bg-red-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+              >
+                Confirmar eliminación
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

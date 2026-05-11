@@ -51,6 +51,7 @@ export interface Contact {
 // Actividad dentro de un lead
 export interface Activity {
   id: string;
+  nombre?: string;
   tipo: TipoActividad;
   estado: EstadoActividad;
   nota: string;

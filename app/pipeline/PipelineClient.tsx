@@ -90,6 +90,7 @@ export default function PipelineClient({
   const { showToast } = useToast();
   const userName  = useAuthStore((s) => s.userName);
   const userEmail = useAuthStore((s) => s.userEmail);
+  const role      = useAuthStore((s) => s.role);
   const { close: closeSidebar, open: openSidebar } = useSidebarStore();
 
   const defaultsForNewLead = useMemo(
@@ -100,8 +101,12 @@ export default function PipelineClient({
     [userName, userEmail],
   );
 
-  const leads    = useLeadStore((s) => s.leads);
-  const setLeads = useLeadStore((s) => s.setLeads);
+  const allLeads  = useLeadStore((s) => s.leads);
+  const setLeads  = useLeadStore((s) => s.setLeads);
+  // Trabajador solo ve sus propios leads; admin ve todos
+  const leads = role === 'Trabajador'
+    ? allLeads.filter(l => l.encargadoEmail === userEmail)
+    : allLeads;
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
   const [editingLead, setEditingLead] = useState<Lead | null>(null);
   const [view, setView] = useState<'pipeline' | 'new-lead' | 'edit-lead'>(prefill ? 'new-lead' : 'pipeline');
@@ -114,9 +119,10 @@ export default function PipelineClient({
   });
 
   // Abrir lead directamente si viene ?leadId= desde notificaciones
+  // Usa `leads` (ya filtrado por rol) para que un trabajador no pueda abrir leads ajenos
   useEffect(() => {
     if (!defaultLeadId) return;
-    const lead = initialLeads.find(l => l.id === defaultLeadId);
+    const lead = leads.find(l => l.id === defaultLeadId);
     if (lead) {
       setEditingLead(lead);
       setView('edit-lead');
@@ -258,7 +264,6 @@ export default function PipelineClient({
 
   const handleLeadUpdate = useCallback((updated: Lead) => {
     setLeads((prev) => prev.map((l) => (l.id === updated.id ? updated : l)));
-    setSelectedLead(updated);
     setEditingLead(updated);
   }, []);
 
