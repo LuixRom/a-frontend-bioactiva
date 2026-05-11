@@ -5,12 +5,18 @@ export type DerivedActivityStatus = 'pendiente' | 'realizada' | 'vencida';
 export function getActivityStatus(activity: Activity): DerivedActivityStatus {
   if (activity.estado === 'realizada') return 'realizada';
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const activityDate = new Date(activity.fecha);
-  activityDate.setHours(0, 0, 0, 0);
+  const raw = new Date(activity.fecha);
+  // Dates stored as UTC midnight (old format) appear as previous local day in UTC-offset timezones.
+  // Shift them to UTC noon so toLocaleDateString gives the intended calendar date.
+  const adjusted =
+    raw.getUTCHours() === 0 && raw.getUTCMinutes() === 0 && raw.getUTCSeconds() === 0
+      ? new Date(Date.UTC(raw.getUTCFullYear(), raw.getUTCMonth(), raw.getUTCDate(), 12))
+      : raw;
 
-  if (activityDate.getTime() < today.getTime()) return 'vencida';
+  const todayStr = new Date().toLocaleDateString('en-CA');
+  const actStr = adjusted.toLocaleDateString('en-CA');
+
+  if (actStr < todayStr) return 'vencida';
   return 'pendiente';
 }
 

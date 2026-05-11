@@ -14,6 +14,7 @@ import Drawer from '@/src/components/ui/Drawer';
 import { createQuote } from '@/src/server/actions/quotes';
 import { useToast } from '@/src/components/ui/Toast';
 import { useAuthStore } from '@/src/store/authStore';
+import { useLeadStore } from '@/src/store/leadStore';
 type QuoteEstado = Quote['estado'];
 
 interface QuotesClientProps {
@@ -64,7 +65,7 @@ const buildInitialQuoteForm = (defaults: { remitente?: string } = {}): QuoteForm
   remitente:     defaults.remitente ?? '',
   observacion:   '',
   linkPropuesta: '',
-  fechaCotizacion: new Date().toISOString().slice(0, 10),
+  fechaCotizacion: (() => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; })(),
 });
 
 export default function QuotesClient({
@@ -76,7 +77,10 @@ export default function QuotesClient({
   const router = useRouter();
   const [, startTransition] = useTransition();
   const { showToast } = useToast();
-  const userName = useAuthStore((s) => s.userName);
+  const userName   = useAuthStore((s) => s.userName);
+  const userEmail  = useAuthStore((s) => s.userEmail);
+  const role       = useAuthStore((s) => s.role);
+  const storeLeads = useLeadStore((s) => s.leads);
   const remitenteDefault = userName ?? 'Karien Díaz';
 
   const initialFormWithDefaults = useMemo(
@@ -84,7 +88,15 @@ export default function QuotesClient({
     [remitenteDefault],
   );
 
-  const [quotesList, setQuotesList] = useState<Quote[]>(initialQuotes);
+  const [quotesList, setQuotesList] = useState<Quote[]>(() => {
+    if (role === 'Trabajador') {
+      const myLeadIds = new Set(
+        storeLeads.filter((l) => l.encargadoEmail === userEmail).map((l) => l.id),
+      );
+      return initialQuotes.filter((q) => myLeadIds.has(q.leadId));
+    }
+    return initialQuotes;
+  });
   const [statusFilter, setStatusFilter] = useState<QuoteEstado | 'todos'>('todos');
   const [view, setView] = useState<'list' | 'new'>('list');
   const [form, setForm] = useState<QuoteFormState>(initialFormWithDefaults);

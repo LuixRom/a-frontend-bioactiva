@@ -75,8 +75,12 @@ export async function markNotificationAsRead(id: string) {
   return { success: true };
 }
 
-export async function getUnreadCount(_userId: string): Promise<number> {
-  return MOCK_NOTIFICATIONS.filter(n => !n.read).length;
+export async function getUnreadCount(userId: string): Promise<number> {
+  const isAdmin = userId === 'admin@bioactiva.pe';
+  const mine = isAdmin
+    ? MOCK_NOTIFICATIONS
+    : MOCK_NOTIFICATIONS.filter((n) => n.encargadoEmail === userId);
+  return mine.filter((n) => !n.read).length;
 }
 
 export async function generateNotifications(): Promise<{ success: boolean; createdCount: number; error?: string }> {

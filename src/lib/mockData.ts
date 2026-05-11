@@ -326,6 +326,19 @@ export const mockContacts: Contact[] = [
     creadoEn: new Date('2025-04-05'),
   },
 
+  // ── AgroTech Innova (ORG-2025-004) ──────────────────────────────────
+  {
+    id: 'CON-2025-026',
+    organizacionId: 'ORG-2025-004',
+    vocativo: 'Sr.',
+    nombres: 'Sebastián',
+    apellidos: 'Vargas Condori',
+    correo1: 'svargas@agrotechinnova.pe',
+    telefono: '987 654 100',
+    cargo: 'Gerente General',
+    creadoEn: new Date('2026-05-10'),
+  },
+
   // ── Constructora del Sur (ORG-2025-006) — 3 contactos ──────────────
   {
     id: 'CON-2025-008',
@@ -455,6 +468,20 @@ export const mockLeads: Lead[] = [
       },
     ],
     creadoEn: new Date('2025-03-05'),
+  },
+  // ── Lead de Carlos Mamani — sin actividades ──────────────────────────
+  {
+    id: 'LEAD-2026-001',
+    organizacionId: 'ORG-2025-004',
+    contactoId: 'CON-2025-026',
+    servicioInteres: 'Ley 30309 - Deducción I+D+i',
+    canal: 'Web / Redes sociales',
+    encargado: 'Carlos Mamani',
+    encargadoEmail: 'cmamani@bioactiva.pe',
+    estado: 'nuevo',
+    desafioOportunidad: 'Identificar proyectos de innovación agrícola calificables bajo Ley 30309 para acceder a deducción tributaria adicional.',
+    actividades: [],
+    creadoEn: new Date('2026-05-10'),
   },
 ];
 
