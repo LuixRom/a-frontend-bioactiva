@@ -2,14 +2,14 @@
 
 import { useState, useTransition, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare, Sparkles, ArrowLeft, X } from 'lucide-react';
+import { Plus, Phone, Mail, Building2, ExternalLink, MessageSquare, Sparkles, ArrowLeft, X, Pencil } from 'lucide-react';
 import Link from 'next/link';
 import { getInitials, cn } from '@/src/lib/utils';
 import { VOCATIVOS } from '@/src/lib/constants';
 import type { Contact, Organization, Lead } from '@/src/types/crm';
 import DataTable from '@/src/components/ui/DataTable';
 import OrgTypeahead from '@/src/components/ui/OrgTypeahead';
-import { createContact } from '@/src/server/actions/contacts';
+import { createContact, updateContact } from '@/src/server/actions/contacts';
 import { useToast } from '@/src/components/ui/Toast';
 
 interface ContactsClientProps {
@@ -29,7 +29,7 @@ export default function ContactsClient({
   const { showToast } = useToast();
   const [contactsList, setContactsList] = useState<Contact[]>(initialContacts);
   const orgsList = organizations;
-  const [view, setView] = useState<'list' | 'new' | 'detail'>('list');
+  const [view, setView] = useState<'list' | 'new' | 'detail' | 'edit'>('list');
   const [orgFilter, setOrgFilter] = useState<string | null>(null);
 
   useEffect(() => {
@@ -84,6 +84,49 @@ export default function ContactsClient({
       } catch (err) {
         showToast(
           err instanceof Error ? err.message : 'Error al crear contacto',
+          'error',
+        );
+      }
+    });
+  };
+
+  const openEdit = (contact: Contact) => {
+    setForm({
+      vocativo: contact.vocativo || '',
+      nombres: contact.nombres,
+      apellidos: contact.apellidos,
+      correo1: contact.correo1,
+      correo2: contact.correo2 || '',
+      cargo: contact.cargo || '',
+      telefono: contact.telefono || '',
+      comentarios: contact.comentarios || '',
+      organizacionId: contact.organizacionId,
+    });
+    setView('edit');
+  };
+
+  const handleUpdateContact = () => {
+    if (!selectedContact || !form.nombres || !form.organizacionId) return;
+    startTransition(async () => {
+      try {
+        const updated = await updateContact(selectedContact.id, {
+          organizacionCodigo: form.organizacionId,
+          vocativo:    form.vocativo || null,
+          nombres:     form.nombres,
+          apellidos:   form.apellidos,
+          correo1:     form.correo1 || null,
+          correo2:     form.correo2 || null,
+          telefono:    form.telefono || null,
+          cargo:       form.cargo || null,
+          comentarios: form.comentarios || null,
+        });
+        setContactsList(prev => prev.map(c => c.id === updated.id ? updated : c));
+        setView('detail');
+        showToast('Contacto actualizado', 'success');
+        router.refresh();
+      } catch (err) {
+        showToast(
+          err instanceof Error ? err.message : 'Error al actualizar contacto',
           'error',
         );
       }
@@ -168,8 +211,8 @@ export default function ContactsClient({
 
   return (
     <div className="space-y-6">
-      {/* Tabs — hidden in detail view */}
-      {view !== 'detail' && (
+      {/* Tabs — hidden in detail/edit view */}
+      {view !== 'detail' && view !== 'edit' && (
         <div className="flex gap-1 bg-app-bg p-1 rounded-xl border border-border-subtle w-fit">
           <button
             onClick={() => { setView('list'); setForm({ vocativo: '', nombres: '', apellidos: '', correo1: '', correo2: '', cargo: '', telefono: '', comentarios: '', organizacionId: '' }); }}
@@ -356,6 +399,130 @@ export default function ContactsClient({
         </div>
       )}
 
+      {/* ── Edit inline view ── */}
+      {view === 'edit' && selectedContact && (
+        <div className="max-w-2xl w-full mx-auto animate-fade-in">
+          <div className="rounded-2xl border border-border-subtle bg-surface p-8 space-y-6">
+            <h2 className="text-lg font-black text-text">Editar contacto</h2>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                Organización <span className="text-red-500">*</span>
+              </label>
+              <OrgTypeahead
+                label=""
+                options={organizations}
+                value={form.organizacionId}
+                onChange={(id) => setForm({ ...form, organizacionId: id })}
+                onCreateNew={() => {}}
+              />
+            </div>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Vocativo</label>
+                  <select
+                    value={form.vocativo}
+                    onChange={(e) => setForm({ ...form, vocativo: e.target.value })}
+                    className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                  >
+                    <option value="">—</option>
+                    {VOCATIVOS.map(v => <option key={v} value={v}>{v}</option>)}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">
+                    Nombres <span className="text-red-500">*</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={form.nombres}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, nombres: e.target.value })}
+                    className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Apellidos</label>
+                <input
+                  type="text"
+                  value={form.apellidos}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, apellidos: e.target.value })}
+                  className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Cargo / Posición</label>
+                  <input
+                    type="text"
+                    value={form.cargo}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, cargo: e.target.value })}
+                    className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Correo electrónico</label>
+                  <input
+                    type="email"
+                    value={form.correo1}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, correo1: e.target.value })}
+                    className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Correo electrónico 2</label>
+                  <input
+                    type="email"
+                    value={form.correo2}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, correo2: e.target.value })}
+                    className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Teléfono</label>
+                  <input
+                    type="text"
+                    value={form.telefono}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, telefono: e.target.value })}
+                    className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-xs font-bold text-text-muted uppercase tracking-wider">Comentarios</label>
+                <input
+                  type="text"
+                  value={form.comentarios}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setForm({ ...form, comentarios: e.target.value })}
+                  className="w-full px-4 py-3 bg-app-bg/30 border border-border-subtle rounded-xl text-sm outline-none focus:border-primary transition-all"
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3 pt-4">
+              <button onClick={() => setView('detail')} className="btn-secondary flex-1">
+                <ArrowLeft className="w-4 h-4" /> Cancelar
+              </button>
+              <button
+                onClick={handleUpdateContact}
+                disabled={!form.nombres || !form.organizacionId}
+                className="btn-primary flex-1 disabled:opacity-50"
+              >
+                Guardar cambios
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Detail inline view ── */}
       {view === 'detail' && selectedContact && (
         <div className="animate-fade-in space-y-6">
@@ -380,13 +547,22 @@ export default function ContactsClient({
                 </div>
               </div>
             </div>
-            <Link
-              href={`/pipeline?prefillContact=${encodeURIComponent(selectedContact.id)}`}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all"
-            >
-              <Sparkles className="w-4 h-4" />
-              Convertir en lead
-            </Link>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => openEdit(selectedContact)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-primary bg-primary/10 hover:bg-primary/20 border border-primary/20 transition-all"
+              >
+                <Pencil className="w-4 h-4" />
+                Editar
+              </button>
+              <Link
+                href={`/pipeline?prefillContact=${encodeURIComponent(selectedContact.id)}`}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 transition-all"
+              >
+                <Sparkles className="w-4 h-4" />
+                Convertir en lead
+              </Link>
+            </div>
           </div>
 
           <div className="grid grid-cols-3 gap-6">

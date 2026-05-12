@@ -29,3 +29,11 @@ export async function createContact(input: ContactInput): Promise<Contact> {
   console.info('[MOCK] createContact', input);
   return mockContacts[0];
 }
+
+export async function updateContact(id: string, input: ContactInput): Promise<Contact> {
+  console.info('[MOCK] updateContact', id, input);
+  const idx = mockContacts.findIndex(c => c.id === id);
+  if (idx === -1) throw new Error('Contacto no encontrado');
+  mockContacts[idx] = { ...mockContacts[idx], ...input };
+  return mockContacts[idx];
+}
