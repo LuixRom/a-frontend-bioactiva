@@ -434,9 +434,9 @@ function DetailModal({
 export default function DashboardClient({
   initialLeads,
   organizations,
-  contacts,
   quotes,
 }: DashboardClientProps) {
+    
   const years = useMemo(() => getYearRange(initialLeads, quotes), [initialLeads, quotes]);
 
   const [analysisYear, setAnalysisYear] = useState(today.getFullYear());
