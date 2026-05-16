@@ -34,6 +34,11 @@ export async function updateContact(id: string, input: ContactInput): Promise<Co
   console.info('[MOCK] updateContact', id, input);
   const idx = mockContacts.findIndex(c => c.id === id);
   if (idx === -1) throw new Error('Contacto no encontrado');
-  mockContacts[idx] = { ...mockContacts[idx], ...input };
+  mockContacts[idx] = {
+    ...mockContacts[idx],
+    ...Object.fromEntries(
+      Object.entries(input).map(([k, v]) => [k, v === null ? undefined : v])
+    ),
+  } as Contact;
   return mockContacts[idx];
 }
