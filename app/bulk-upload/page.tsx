@@ -218,7 +218,7 @@ export default function BulkUploadPage() {
         contact.cargo ?? '',
         org?.nombre ?? '',
         org?.ruc ?? '',
-      ].some(value => value.toLowerCase().includes(query));
+      ].some(value => String(value ?? '').toLowerCase().includes(query));
 
       return contactMatches;
     });

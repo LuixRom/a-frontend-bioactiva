@@ -37,7 +37,7 @@ export interface Organization {
 export interface Contact {
   id: string;                  // "CON-2025-001" (o "ID00001" del Excel)
   organizacionId: string;
-  vocativo?: string;
+  vocativo?: string | null;
   nombres: string;
   apellidos: string;
   correo1: string;
